@@ -33,6 +33,25 @@ USER_AGENT = 'Waypoint/1.0 (travel planning agent; +https://github.com/waypoint)
 BROWSER_UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
               '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36')
 
+# Chromium peaked at 622 MiB with default flags, over the 512 MiB a small
+# instance gets. These trim it without changing what the screenshot shows.
+CHROMIUM_ARGS = [
+    '--disable-blink-features=AutomationControlled',
+    '--disable-dev-shm-usage',       # /dev/shm is tiny in containers
+    '--disable-gpu',
+    '--no-sandbox',                  # no setuid sandbox in the image
+    '--disable-extensions',
+    '--disable-background-networking',
+    '--disable-features=site-per-process,TranslateUI',  # no process per iframe
+    '--renderer-process-limit=1',
+    '--js-flags=--max-old-space-size=192',
+]
+
+# Set on a memory-constrained host to skip browser capture entirely. Hotels
+# from the rate provider already carry real photographs, so this mostly costs
+# the map fallback rather than the main imagery path.
+SCREENSHOTS_DISABLED = os.getenv('WAYPOINT_DISABLE_SCREENSHOTS', '').lower() in ('1', 'true', 'yes')
+
 # Overridable so a container can put captures on a mounted disk.
 CAPTURE_DIR = os.getenv(
     'WAYPOINT_CAPTURE_DIR',
@@ -111,6 +130,7 @@ class ImageryTool(ToolBase):
                     'prefer': 'website | map | photo (default website)',
                 },
                 returns='HotelImage',
+                required=['name'],
             ),
             ToolCapability(
                 name='find_photos',
@@ -121,6 +141,7 @@ class ImageryTool(ToolBase):
                     'limit': 'Max photos (default 5)',
                 },
                 returns='list[Photo]',
+                required=['lat', 'lon'],
             ),
         ]
 
@@ -178,6 +199,9 @@ class ImageryTool(ToolBase):
     # ── 1. live website screenshot ───────────────────────────────
 
     def _shoot_website(self, url: str, name: str) -> Tuple[Optional[Dict], Optional[Provenance], str]:
+        if SCREENSHOTS_DISABLED:
+            return None, None, 'browser capture is switched off on this host'
+
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
@@ -196,7 +220,7 @@ class ImageryTool(ToolBase):
         with self._browser_lock:
             try:
                 with sync_playwright() as pw:
-                    browser = pw.chromium.launch(args=['--disable-blink-features=AutomationControlled'])
+                    browser = pw.chromium.launch(args=CHROMIUM_ARGS)
                     ctx = browser.new_context(viewport={'width': 1280, 'height': 800},
                                               user_agent=BROWSER_UA, locale='en-US')
                     page = ctx.new_page()
@@ -257,6 +281,9 @@ class ImageryTool(ToolBase):
 
     def _shoot_map(self, lat: float, lon: float, name: str,
                    zoom: int = 16) -> Tuple[Optional[Dict], Optional[Provenance], str]:
+        if SCREENSHOTS_DISABLED:
+            return None, None, 'browser capture is switched off on this host'
+
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
@@ -274,7 +301,7 @@ class ImageryTool(ToolBase):
         with self._browser_lock:
             try:
                 with sync_playwright() as pw:
-                    browser = pw.chromium.launch()
+                    browser = pw.chromium.launch(args=CHROMIUM_ARGS)
                     page = browser.new_page(viewport={'width': 900, 'height': 600})
                     try:
                         page.set_content(html, wait_until='load', timeout=self._timeout * 1000)

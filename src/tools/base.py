@@ -72,6 +72,10 @@ class ToolCapability:
     description: str                    # Human-readable description
     parameters: Dict[str, Any] = field(default_factory=dict)  # JSON schema of params
     returns: str = 'list'               # What kind of data comes back
+    # Parameters the capability cannot run without. These are marked required
+    # in the schema the model sees; leaving everything optional let it call
+    # tools with no arguments and then report a dead end to the traveller.
+    required: List[str] = field(default_factory=list)
 
 
 class ToolBase(ABC):
@@ -138,6 +142,7 @@ class ToolBase(ABC):
                     'name': c.name,
                     'description': c.description,
                     'parameters': c.parameters,
+                    'required': c.required,
                     'returns': c.returns,
                 }
                 for c in self.capabilities

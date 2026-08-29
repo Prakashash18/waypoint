@@ -26,12 +26,13 @@ ENV PYTHONUNBUFFERED=1 \
     # keyring in a container, so use the file backend and keep it on the disk
     # mounted at /data, otherwise every deploy would log you out.
     PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring \
-    XDG_DATA_HOME=/data/keyring \
-    XDG_CONFIG_HOME=/data/config \
-    # Written at runtime; kept on the disk so a restart does not re-fetch
-    # everything and burn the metered free RapidAPI tier.
-    WAYPOINT_CAPTURE_DIR=/data/captures \
-    WAYPOINT_CACHE_DIR=/data/hotel_rates
+    XDG_DATA_HOME=/var/waypoint/keyring \
+    XDG_CONFIG_HOME=/var/waypoint/config \
+    # Written at runtime. Point these at a mounted volume on a paid plan so a
+    # restart does not re-fetch everything and re-spend the metered RapidAPI
+    # tier; on the free plan they are simply ephemeral.
+    WAYPOINT_CAPTURE_DIR=/var/waypoint/captures \
+    WAYPOINT_CACHE_DIR=/var/waypoint/hotel_rates
 
 WORKDIR /app
 
@@ -49,12 +50,19 @@ RUN playwright install --with-deps chromium
 COPY . .
 COPY --from=ui /out ./src/ui/agent-app
 
-RUN mkdir -p /data/captures /data/hotel_rates /data/keyring /data/config
+RUN mkdir -p /var/waypoint/captures /var/waypoint/hotel_rates \
+             /var/waypoint/keyring /var/waypoint/config \
+    && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s \
     CMD curl -fsS http://localhost:8000/api/health || exit 1
 
-# Two workers, long timeout: a planning run makes several upstream calls and a
-# screenshot can take a few seconds.
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 180 --access-logfile - run:app"]
+# The entrypoint restores the Atlas credential from ATLAS_KEYRING_B64 when one
+# is set, then hands off to gunicorn.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# One worker on the free plan's 512 MB; Chromium needs room to start.
+# Long timeout: a planning run makes several upstream calls and a screenshot
+# can take a few seconds.
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_WORKERS:-1} --threads 8 --timeout 180 --access-logfile - run:app"]

@@ -94,12 +94,14 @@ class HotelRatesTool(ToolBase):
                     'max_price': 'Only hotels at or below this total price (optional)',
                 },
                 returns='list[HotelOffer]',
+                required=['destination', 'check_in', 'check_out'],
             ),
             ToolCapability(
                 name='get_hotel_photos',
                 description='Get all real photographs Booking.com holds for one hotel',
                 parameters={'hotel_id': 'Booking.com hotel id from search_hotels'},
                 returns='list[Photo]',
+                required=['hotel_id'],
             ),
         ]
 

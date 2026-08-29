@@ -45,6 +45,7 @@ class AtlasTool(ToolBase):
                 },
                 returns=('list[FlightOffer] — price_total covers ALL passengers on '
                          'the booking; price_per_passenger is the per-person fare'),
+                required=['origin', 'destination', 'depart'],
             ),
             ToolCapability(
                 name='find_date_deals',
@@ -64,18 +65,21 @@ class AtlasTool(ToolBase):
                     'currency': 'Currency code (default USD)',
                 },
                 returns='list[DateWindow] sorted cheapest first',
+                required=['origin', 'destination', 'around'],
             ),
             ToolCapability(
                 name='verify_offer',
                 description='Check if an offer is still available and priced',
                 parameters={'offer_id': 'The offer ID to verify'},
                 returns='OfferDetails',
+                required=['offer_id'],
             ),
             ToolCapability(
                 name='confirm_price',
                 description='Lock in the price for an offer',
                 parameters={'offer_id': 'The offer ID'},
                 returns='PriceConfirmation',
+                required=['offer_id'],
             ),
         ]
     

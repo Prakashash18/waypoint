@@ -46,8 +46,13 @@ OVERPASS_ENDPOINTS = [
 
 # How OSM marks an airport people actually fly from. A major hub carries
 # aerodrome=international; Seletar carries it too but is tagged regional, and
-# an air base carries military tags — hence the tiering rather than a flag.
-AIRPORT_TIER_BOOST = {3: 6.0, 2: 1.5, 1: 1.0}
+# an air base carries military tags — hence tiers rather than a single flag.
+#
+# Tier beats distance outright. Weighting distance by tier was not enough: from
+# north-east Singapore, Seletar at 1.4 km still outranked Changi at 15 km, and
+# Seletar has no scheduled passenger service. Someone booking a flight wants
+# the international airport even when a smaller field is closer.
+AIRPORT_TIER_INTERNATIONAL = 3
 
 NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 WIKI_SUMMARY_URL = 'https://en.wikipedia.org/api/rest_v1/page/summary/{title}'
@@ -146,6 +151,7 @@ class PlacesTool(ToolBase):
                     'min_stars': 'Only return hotels tagged at least this many stars (optional)',
                 },
                 returns='list[Hotel]',
+                required=['destination'],
             ),
             ToolCapability(
                 name='nearest_airports',
@@ -161,6 +167,7 @@ class PlacesTool(ToolBase):
                     'limit': 'Max airports to return (default 5)',
                 },
                 returns='list[Airport]',
+                required=['lat', 'lon'],
             ),
             ToolCapability(
                 name='match_hotel',
@@ -176,18 +183,21 @@ class PlacesTool(ToolBase):
                     'lon': 'Longitude of the hotel',
                 },
                 returns='HotelMatch',
+                required=['name', 'lat', 'lon'],
             ),
             ToolCapability(
                 name='geocode_place',
                 description='Resolve a place name to real coordinates and a display name',
                 parameters={'query': 'Place name to look up'},
                 returns='Coordinates',
+                required=['query'],
             ),
             ToolCapability(
                 name='describe_area',
                 description='Get a factual Wikipedia description of a neighbourhood or town',
                 parameters={'place': 'Place name, e.g. "Ubud"'},
                 returns='AreaDescription',
+                required=['place'],
             ),
         ]
 
@@ -528,9 +538,9 @@ class PlacesTool(ToolBase):
                 'tier': tier,
             })
 
-        # A hub 45km out beats an airstrip 9km out: weight distance by tier
-        # rather than sorting on raw proximity.
-        airports.sort(key=lambda a: a['distance_km'] / AIRPORT_TIER_BOOST[a['tier']])
+        # Highest tier first, then nearest within that tier. A regional field
+        # only surfaces when nothing international is in range.
+        airports.sort(key=lambda a: (-a['tier'], a['distance_km']))
         seen, unique = set(), []
         for a in airports:
             if a['iata'] not in seen:

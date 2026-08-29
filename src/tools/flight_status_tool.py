@@ -42,6 +42,7 @@ class FlightStatusTool(ToolBase):
                     'days': 'Number of days to look ahead (default 3)',
                 },
                 returns='list[DelayedFlight]',
+                required=['airport_code'],
             ),
         ]
     

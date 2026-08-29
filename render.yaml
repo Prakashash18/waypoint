@@ -1,22 +1,34 @@
-# Render blueprint. Deploy with: render.com -> New -> Blueprint -> point at this repo.
+# Render blueprint. Deploy with: Render -> New -> Blueprint -> pick this repo.
 services:
   - type: web
     name: waypoint
     runtime: docker
-    plan: starter          # a persistent disk requires a paid instance type
+    plan: free
     healthCheckPath: /api/health
-    disk:
-      name: waypoint-data
-      mountPath: /data     # Atlas keyring, screenshots, rate cache
-      sizeGB: 1
     envVars:
-      - key: OPENAI_API_KEY
-        sync: false        # set these in the Render dashboard, never in git
-      - key: RAPIDAPI_KEY
+      # Set every one of these in the Render dashboard. sync:false keeps them
+      # out of git — Render will prompt for them when you apply the blueprint.
+      - key: OPENAI_API_KEY          # required: without it the agent cannot plan
         sync: false
-      - key: ELEVENLABS_API_KEY
+      - key: RAPIDAPI_KEY            # hotel rates, review scores, photographs
         sync: false
-      - key: AVIATIONSTACK_API_KEY
+      - key: ELEVENLABS_API_KEY      # voice in and out
         sync: false
-      - key: PORT
-        value: 8000
+      - key: AVIATIONSTACK_API_KEY   # live flight delays
+        sync: false
+      - key: ATLAS_KEYRING_B64       # flights; see scripts/export-atlas-credential.sh
+        sync: false
+      - key: WEB_WORKERS
+        value: 1                     # the free plan has 512 MB; Chromium needs room
+
+# The free plan has no persistent disk and no shell, so the Atlas login cannot
+# be performed on the server — hence ATLAS_KEYRING_B64 above. It also sleeps
+# after 15 minutes idle, and the hotel rate cache is lost on each cold start.
+#
+# To move to the paid Starter plan later, change `plan: free` to `plan: starter`
+# and add:
+#
+#   disk:
+#     name: waypoint-data
+#     mountPath: /var/waypoint
+#     sizeGB: 1

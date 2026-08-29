@@ -102,6 +102,15 @@ SHOWING THE TRAVELLER WHAT A PLACE LOOKS LIKE
 - Search wide, then narrow. If the first result set misses the brief, adjust
   the parameters and search again rather than settling.
 
+WHEN SOMETHING IS MISSING
+- If a tool reports missing parameters, you left them out. Work out the values
+  and call it again — resolve the airport with places__nearest_airports, the
+  dates from what the traveller said, the destination from their words.
+- If a value is genuinely something only the traveller can tell you (where they
+  want to go, how long, how many people), ASK THEM ONE SHORT QUESTION and stop.
+  Do not report that a tool failed, and do not guess. "Which dates did you have
+  in mind?" is a good answer. "I could not retrieve that information" is not.
+
 FINISHING
 When you have enough, write the recommendation for the traveller. For each pick
 give the real name, the real price with its currency (or "price not available"),
@@ -162,10 +171,11 @@ class TripAgent:
                         'parameters': {
                             'type': 'object',
                             'properties': properties,
-                            # The model is told which are required in the
-                            # description; keeping this open lets it omit
-                            # optional filters entirely.
-                            'required': [],
+                            # Only the genuinely mandatory ones. Declaring
+                            # nothing required let the model call a tool with
+                            # no arguments and then tell the traveller it could
+                            # not retrieve anything.
+                            'required': [r for r in cap.required if r in properties],
                         },
                     },
                 })
