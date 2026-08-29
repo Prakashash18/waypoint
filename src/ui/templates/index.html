@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waypoint — Agentic Travel Booking</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* ═══ TOKENS ═══════════════════════════════════════ */
+        :root {
+            --cockpit:    #0B1929;
+            --panel:      #1A2332;
+            --panel-hi:   #243447;
+            --border:     #2A3A4D;
+            --hud:        #E2E8F0;
+            --hud-dim:    #8899AA;
+            --runway:     #FF6A00;
+            --runway-hi:  #FF8C33;
+            --cleared:    #22C55E;
+            --grounded:   #EF4444;
+            --caution:    #F59E0B;
+            --mono:       'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+            --sans:       'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            --radius:     10px;
+            --radius-sm:  6px;
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        /* ═══ RESET ════════════════════════════════════════ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: var(--sans);
+            background: var(--cockpit);
+            color: var(--hud);
+            font-size: 16px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ═══ LAYOUT — AGENT-FIRST FULL-VIEWPORT ═════════ */
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            max-width: 720px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* ═══ STATUS STRIP (replaces header) ═══════════════ */
+        .status-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .brand {
+            font-family: var(--mono);
+            font-weight: 700;
+            font-size: 0.95em;
+            letter-spacing: 0.08em;
+            color: var(--runway);
+            white-space: nowrap;
+        }
+
+        .status-chips {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .chip {
+            font-family: var(--mono);
+            font-size: 0.72em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: var(--panel-hi);
+            color: var(--hud-dim);
+            white-space: nowrap;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: border-color 0.15s;
+        }
+
+        .chip:hover { border-color: var(--border); }
+
+        .chip.active { border-color: var(--runway); color: var(--hud); }
+
+        .chip-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        .chip-dot.green { background: var(--cleared); }
+        .chip-dot.red { background: var(--grounded); }
+        .chip-dot.amber { background: var(--caution); }
+
+        /* ═══ TRACKER BAR ═════════════════════════════════ */
+        .tracker-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 16px;
+            background: rgba(26, 35, 50, 0.9);
+            border-bottom: 1px solid var(--border);
+            font-family: var(--mono);
+            font-size: 0.68em;
+            color: var(--hud-dim);
+            flex-shrink: 0;
+            gap: 6px;
+            overflow-x: auto;
+        }
+
+        .tracker-strip .t-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        .tracker-strip .t-cost { color: var(--cleared); font-weight: 600; }
+
+        .tracker-strip button {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--hud-dim);
+            padding: 2px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        /* ═══ LOCATION NOTIFICATION ════════════════════════ */
+        .location-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            background: var(--panel-hi);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            gap: 10px;
+        }
+
+        .location-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+        }
+
+        .location-icon { font-size: 1.1em; }
+
+        .location-info strong { color: var(--hud); }
+        .location-info div { color: var(--hud-dim); font-size: 0.88em; }
+
+        /* ═══ DELAYS DRAWER ═══════════════════════════════ */
+        .delays-panel {
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            max-height: 40vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .delays-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            position: sticky;
+            top: 0;
+            background: var(--panel);
+            z-index: 2;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .delays-header h2 {
+            font-family: var(--mono);
+            font-size: 0.85em;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--hud);
+        }
+
+        .delay-badge {
+            font-family: var(--mono);
+            font-size: 0.75em;
+            font-weight: 600;
+            background: var(--grounded);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+
+        .delay-item {
+            border-left: 3px solid var(--grounded);
+            padding: 10px 16px;
+            margin: 0;
+            background: transparent;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            transition: background 0.15s;
+        }
+
+        .delay-item:hover { background: var(--panel-hi); }
+
+        .delay-flight {
+            font-family: var(--mono);
+            font-weight: 600;
+            font-size: 0.9em;
+            color: var(--hud);
+            margin-bottom: 3px;
+        }
+
+        .delay-details {
+            display: flex;
+            gap: 12px;
+            font-family: var(--mono);
+            font-size: 0.78em;
+            color: var(--hud-dim);
+            flex-wrap: wrap;
+        }
+
+        .delay-time {
+            color: var(--grounded);
+            font-weight: 600;
+        }
+
+        .delay-actions {
+            margin-top: 8px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .rebook-btn {
+            background: var(--runway);
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            border-radius: var(--radius-sm);
+            font-family: var(--sans);
+            font-size: 0.82em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+            letter-spacing: 0.02em;
+        }
+
+        .rebook-btn:hover { background: var(--runway-hi); }
+        .rebook-btn:disabled { background: var(--hud-dim); cursor: not-allowed; }
+
+        /* Simulate toggle styled as a cockpit switch */
+        .sim-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-family: var(--mono);
+            font-size: 0.72em;
+            color: var(--hud-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .sim-toggle input {
+            appearance: none;
+            width: 32px;
+            height: 18px;
+            background: var(--border);
+            border-radius: 9px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .sim-toggle input::after {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--hud-dim);
+            top: 2px;
+            left: 2px;
+            transition: all 0.2s;
+        }
+
+        .sim-toggle input:checked {
+            background: var(--runway);
+        }
+
+        .sim-toggle input:checked::after {
+            background: white;
+            left: 16px;
+        }
+
+        /* ═══ CHAT — THE HERO ═════════════════════════════ */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            background: var(--cockpit);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 10px;
+            animation: msgIn 0.25s ease-out;
+        }
+
+        @keyframes msgIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .message.agent .message-avatar {
+            background: var(--panel);
+            border: 1px solid var(--border);
+        }
+
+        .message.user .message-avatar {
+            background: var(--panel-hi);
+            border: 1px solid var(--border);
+        }
+
+        .message-content {
+            max-width: 78%;
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            line-height: 1.55;
+            font-size: 0.92em;
+        }
+
+        .message.agent .message-content {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--runway);
+            color: var(--hud);
+        }
+
+        .message.user .message-content {
+            background: var(--panel-hi);
+            border: 1px solid var(--border);
+            color: var(--hud);
+        }
+
+        /* ═══ CHAT INPUT ══════════════════════════════════ */
+        .chat-input-container {
+            padding: 12px 16px;
+            padding-bottom: calc(12px + var(--safe-bottom));
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            font-size: 15px;
+            font-family: var(--sans);
+            resize: none;
+            max-height: 120px;
+            background: var(--cockpit);
+            color: var(--hud);
+            line-height: 1.4;
+        }
+
+        .chat-input::placeholder { color: var(--hud-dim); }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--runway);
+            box-shadow: 0 0 0 2px rgba(255, 106, 0, 0.15);
+        }
+
+        .input-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .action-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.15s;
+            background: var(--panel-hi);
+            color: var(--hud-dim);
+        }
+
+        .voice-btn:hover, .image-btn:hover { border-color: var(--hud-dim); color: var(--hud); }
+
+        .voice-btn.recording {
+            background: var(--grounded);
+            color: white;
+            border-color: var(--grounded);
+            animation: pulse 1.5s infinite;
+        }
+
+        .send-btn {
+            background: var(--runway);
+            color: white;
+            border-color: var(--runway);
+        }
+
+        .send-btn:hover { background: var(--runway-hi); border-color: var(--runway-hi); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* ═══ QUICK QUESTIONS ═════════════════════════════ */
+        .quick-questions {
+            background: var(--panel-hi);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--runway);
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-top: 6px;
+            max-width: 85%;
+        }
+
+        .quick-q-title {
+            font-weight: 600;
+            color: var(--hud);
+            margin-bottom: 8px;
+            font-size: 0.88em;
+        }
+
+        .quick-q-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .quick-option {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 7px 12px;
+            font-size: 0.82em;
+            font-family: var(--sans);
+            cursor: pointer;
+            transition: all 0.12s;
+            color: var(--hud-dim);
+        }
+
+        .quick-option:hover {
+            border-color: var(--runway);
+            color: var(--hud);
+        }
+
+        .quick-option.selected {
+            border-color: var(--runway);
+            background: var(--runway);
+            color: white;
+        }
+
+        .quick-submit-row {
+            margin-top: 12px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .quick-submit-btn {
+            background: var(--cleared);
+            color: white;
+            border: none;
+            padding: 8px 22px;
+            border-radius: var(--radius-sm);
+            font-family: var(--sans);
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .quick-submit-btn:hover { filter: brightness(1.1); }
+        .quick-submit-btn:disabled { background: var(--hud-dim); cursor: not-allowed; }
+
+        /* ═══ OPTIONS (Boarding Pass Style) ════════════════ */
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-top: 12px;
+            flex-shrink: 0;
+        }
+
+        .card h2 {
+            font-family: var(--mono);
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--hud);
+            margin-bottom: 12px;
+        }
+
+        .options-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .option-card {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--panel-hi);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--cleared);
+        }
+
+        .option-card:hover {
+            border-color: var(--runway);
+            box-shadow: 0 0 20px rgba(255, 106, 0, 0.1);
+        }
+
+        .option-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .option-flight {
+            font-family: var(--mono);
+            font-size: 1em;
+            font-weight: 600;
+            color: var(--hud);
+        }
+
+        .option-price {
+            font-family: var(--mono);
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--runway);
+        }
+
+        .option-details {
+            display: flex;
+            gap: 14px;
+            font-family: var(--mono);
+            color: var(--hud-dim);
+            font-size: 0.8em;
+            margin-bottom: 6px;
+        }
+
+        .option-tradeoff {
+            color: var(--hud-dim);
+            font-style: italic;
+            font-size: 0.88em;
+        }
+
+        /* ═══ TRIP PLANNER ═══════════════════════════════ */
+        .plan-trip-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--runway);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            padding: 8px 16px;
+            font-family: var(--sans);
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        .plan-trip-btn:hover {
+            background: var(--runway-hi);
+        }
+
+        .trip-form {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px;
+            max-width: 480px;
+        }
+
+        .trip-form h3 {
+            font-family: var(--sans);
+            font-size: 1.05em;
+            color: var(--runway);
+            margin-bottom: 14px;
+        }
+
+        .trip-form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .trip-form-row label {
+            font-family: var(--mono);
+            font-size: 0.78em;
+            color: var(--hud-dim);
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .trip-form-row input, .trip-form-row select {
+            background: var(--cockpit);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--hud);
+            padding: 8px 10px;
+            font-family: var(--mono);
+            font-size: 0.88em;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .trip-form-row input:focus, .trip-form-row select:focus {
+            outline: none;
+            border-color: var(--runway);
+        }
+
+        .trip-form-submit {
+            background: var(--cleared);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            padding: 10px 24px;
+            font-family: var(--sans);
+            font-weight: 600;
+            font-size: 0.95em;
+            cursor: pointer;
+            margin-top: 6px;
+            transition: opacity 0.2s;
+        }
+
+        .trip-form-submit:hover { opacity: 0.85; }
+        .trip-form-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .trip-package {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0;
+            background: var(--panel);
+            margin-bottom: 14px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .trip-package:hover {
+            border-color: var(--runway);
+            box-shadow: 0 0 20px rgba(255, 106, 0, 0.1);
+        }
+
+        .trip-package-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--cockpit);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .trip-package-label {
+            font-family: var(--mono);
+            font-weight: 600;
+            font-size: 0.85em;
+            color: var(--runway);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .trip-package-price {
+            font-family: var(--mono);
+            font-weight: 700;
+            font-size: 1.15em;
+            color: var(--cleared);
+        }
+
+        .trip-package-price.over-budget {
+            color: var(--grounded);
+        }
+
+        .trip-package-body {
+            padding: 14px 16px;
+        }
+
+        .trip-package-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .trip-package-icon {
+            font-size: 1.1em;
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+        }
+
+        .trip-package-detail {
+            flex: 1;
+        }
+
+        .trip-package-detail strong {
+            color: var(--hud);
+            font-weight: 600;
+        }
+
+        .trip-package-detail .meta {
+            font-family: var(--mono);
+            font-size: 0.78em;
+            color: var(--hud-dim);
+        }
+
+        .trip-package-reason {
+            font-size: 0.88em;
+            color: var(--hud-dim);
+            font-style: italic;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+            margin-top: 4px;
+        }
+
+        .trip-budget-bar {
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--mono);
+            font-size: 0.78em;
+            color: var(--hud-dim);
+            padding: 6px 16px;
+            background: rgba(255,255,255,0.02);
+            border-top: 1px solid var(--border);
+        }
+        /* ═══ CHECKPOINT ══════════════════════════════════ */
+        .checkpoint-card {
+            border: 2px solid var(--caution);
+            border-radius: var(--radius);
+            padding: 18px;
+            background: var(--panel);
+            margin-top: 12px;
+        }
+
+        .checkpoint-header { margin-bottom: 12px; }
+
+        .checkpoint-type {
+            font-family: var(--mono);
+            font-size: 0.72em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            background: var(--caution);
+            color: var(--cockpit);
+            padding: 3px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .checkpoint-title {
+            font-size: 1.15em;
+            font-weight: 700;
+            color: var(--hud);
+            margin-bottom: 8px;
+        }
+
+        .checkpoint-section { margin-bottom: 12px; }
+
+        .checkpoint-section h3 {
+            font-family: var(--mono);
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--hud-dim);
+            margin-bottom: 4px;
+        }
+
+        .checkpoint-section p {
+            color: var(--hud);
+            line-height: 1.5;
+            font-size: 0.92em;
+        }
+
+        .cli-command {
+            background: var(--cockpit);
+            color: var(--cleared);
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            font-family: var(--mono);
+            font-size: 0.8em;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+        }
+
+        .checkpoint-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .btn {
+            padding: 10px 22px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: var(--sans);
+            font-size: 0.88em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-approve { background: var(--cleared); color: white; }
+        .btn-approve:hover { filter: brightness(1.1); }
+        .btn-reject { background: var(--grounded); color: white; }
+        .btn-reject:hover { filter: brightness(1.1); }
+        .btn-primary { background: var(--runway); color: white; }
+        .btn-primary:hover { background: var(--runway-hi); }
+
+        /* ═══ SUCCESS ═════════════════════════════════════ */
+        .success-banner {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid var(--cleared);
+            border-left: 4px solid var(--cleared);
+            padding: 18px;
+            border-radius: var(--radius);
+            margin-top: 12px;
+        }
+
+        .success-banner h3 { color: var(--cleared); margin-bottom: 8px; }
+        .success-banner p { color: var(--hud); font-size: 0.92em; }
+
+        .audit-link {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 8px 18px;
+            background: var(--runway);
+            color: white;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.88em;
+        }
+
+        .audit-link:hover { background: var(--runway-hi); }
+
+        /* ═══ MISC ════════════════════════════════════════ */
+        .hidden { display: none !important; }
+
+        .image-preview {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: var(--radius-sm);
+            margin-top: 8px;
+        }
+
+        #image-input { display: none; }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 10px 14px;
+        }
+
+        .typing-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--hud-dim);
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-8px); opacity: 1; }
+        }
+
+        /* ═══ SCROLLBAR ═══════════════════════════════════ */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--hud-dim); }
+
+        /* ═══ RESPONSIVE ══════════════════════════════════ */
+        @media (min-width: 768px) {
+            .container {
+                padding: 16px;
+                height: calc(100dvh - 32px);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                margin-top: 16px;
+            }
+
+            .chat-messages { padding: 20px; }
+
+            .message-content { max-width: 70%; }
+        }
+
+        @media (max-width: 380px) {
+            .status-chips { gap: 4px; }
+            .chip { font-size: 0.65em; padding: 2px 6px; }
+            .message-content { max-width: 85%; font-size: 0.88em; }
+        }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Status Strip -->
+        <div class="status-strip">
+            <div class="brand">WYPNT</div>
+            <div class="status-chips">
+                <span class="chip" id="chip-location" onclick="showDelays()">
+                    <span class="chip-dot amber" id="location-dot"></span>
+                    <span id="chip-airport">LOCATING</span>
+                </span>
+                <span class="chip" id="chip-delays" onclick="showDelays()">
+                    <span class="chip-dot red" id="delays-dot"></span>
+                    <span id="chip-delay-count">0 DLY</span>
+                </span>
+                <span class="chip active" id="chip-status">READY</span>
+            </div>
+        </div>
+
+        <!-- Tracker Strip -->
+        <div class="tracker-strip">
+            <div class="t-group">
+                <span>Calls <span id="total-calls">0</span></span>
+                <span>AI <span id="openai-calls">0</span></span>
+                <span>Atlas <span id="atlas-calls">0</span></span>
+                <span>API <span id="aviation-calls">0</span></span>
+                <span class="t-cost">$<span id="total-cost">0.000</span></span>
+            </div>
+            <button onclick="refreshTracker()">↻</button>
+        </div>
+        
+        <!-- Location Banner (inline) -->
+        <div id="location-banner" class="location-banner hidden">
+            <div class="location-info">
+                <span class="location-icon">📍</span>
+                <div>
+                    <strong id="location-airport">Detecting location...</strong>
+                    <div id="location-details"></div>
+                </div>
+            </div>
+            <button onclick="showDelays()" class="btn btn-primary" style="padding: 6px 14px; font-size: 13px;">View Delays</button>
+        </div>
+        
+        <!-- Flight Delays Panel -->
+        <div id="delays-panel" class="delays-panel hidden">
+            <div class="delays-header">
+                <h2>Current Delays</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label class="sim-toggle">
+                        <input type="checkbox" id="simulate-toggle" onchange="toggleSimulate()">
+                        <span>DEMO</span>
+                    </label>
+                    <span class="delay-badge" id="delay-count">0</span>
+                </div>
+            </div>
+            <div id="delays-list"></div>
+        </div>
+        
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message agent">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        Welcome to Waypoint — your AI travel agent. I can plan trips, search flights and hotels, or help with disrupted flights. What can I help you with?
+                        <br><button class="plan-trip-btn" onclick="showTripForm()">✈️ Plan a Trip</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="chat-input-wrapper">
+                    <textarea 
+                        class="chat-input" 
+                        id="chat-input" 
+                        placeholder="Plan a trip, search flights, or ask me anything..."
+                        rows="1"
+                    ></textarea>
+                    <div class="input-actions">
+                        <button class="action-btn voice-btn" id="voice-btn" title="Voice input">🎤</button>
+                        <button class="action-btn image-btn" id="image-btn" title="Upload image">📷</button>
+                        <button class="action-btn send-btn" id="send-btn" title="Send">➤</button>
+                    </div>
+                </div>
+                <input type="file" id="image-input" accept="image/*" capture="environment">
+            </div>
+        </div>
+        
+        <!-- Options Display -->
+        <div id="options-section" class="card hidden">
+            <h2>Replacement Flight Options</h2>
+            <div id="options-list" class="options-list"></div>
+        </div>
+        
+        <!-- Checkpoint Card -->
+        <div id="checkpoint-section" class="hidden">
+            <div id="checkpoint-card" class="checkpoint-card"></div>
+        </div>
+        
+        <!-- Success Message -->
+        <div id="success-section" class="hidden">
+            <div class="success-banner">
+                <h3>✓ Ticket Issued Successfully!</h3>
+                <p id="ticket-details"></p>
+                <a href="/api/audit/export?format=json" class="audit-link">Download Audit Trail</a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentState = null;
+        let currentCheckpoint = null;
+        let isRecording = false;
+        let recognition = null;
+        let currentAirport = null;
+        
+        // Request geolocation on page load
+        window.addEventListener('load', () => {
+            requestLocation();
+        });
+        
+        function requestLocation() {
+            if (!navigator.geolocation) {
+                console.log('Geolocation not supported');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    
+                    try {
+                        const response = await fetch('/api/location', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lat: latitude, lon: longitude })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success && data.airports.length > 0) {
+                            const airport = data.airports[0];
+                            currentAirport = airport.code;
+                            
+                            document.getElementById('location-airport').textContent = airport.name;
+                            document.getElementById('location-details').textContent = 
+                                `${airport.city} • ${airport.code} • ${airport.distance_km}km away`;
+                            document.getElementById('location-banner').classList.remove('hidden');
+                            
+                            // Update status chip
+                            document.getElementById('chip-airport').textContent = airport.code;
+                            document.getElementById('location-dot').className = 'chip-dot green';
+                            
+                            // Auto-fetch delays
+                            fetchDelays(airport.code);
+                        }
+                    } catch (error) {
+                        console.error('Location error:', error);
+                    }
+                },
+                (error) => {
+                    console.log('Geolocation denied:', error);
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+        
+        async function fetchDelays(airportCode, days = 3) {
+            try {
+                const response = await fetch(`/api/flight-delays?airport=${airportCode}&days=${days}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayDelays(data.delays);
+                }
+            } catch (error) {
+                console.error('Failed to fetch delays:', error);
+            }
+        }
+        
+        function displayDelays(delays) {
+            const delaysList = document.getElementById('delays-list');
+            delaysList.innerHTML = '';
+            
+            if (delays.length === 0) {
+                delaysList.innerHTML = '<p style="color: var(--hud-dim); text-align: center; padding: 20px; font-family: var(--mono); font-size: 0.85em;">All clear — no delays reported</p>';
+                document.getElementById('delay-count').textContent = '0';
+                document.getElementById('delay-count').style.background = 'var(--cleared)';
+                document.getElementById('chip-delay-count').textContent = '0 DLY';
+                document.getElementById('delays-dot').className = 'chip-dot green';
+                return;
+            }
+            
+            document.getElementById('delay-count').textContent = delays.length;
+            document.getElementById('chip-delay-count').textContent = `${delays.length} DLY`;
+            document.getElementById('delays-dot').className = 'chip-dot red';
+            
+            delays.slice(0, 10).forEach((delay, idx) => {
+                const scheduled = new Date(delay.scheduled_departure);
+                const actual = new Date(delay.actual_departure);
+                
+                const delayItem = document.createElement('div');
+                delayItem.className = 'delay-item';
+                
+                // Only show Rebook button in simulate mode
+                const simulateOn = document.getElementById('simulate-toggle').checked;
+                const rebookBtnHtml = simulateOn 
+                    ? `<div class="delay-actions"><button class="rebook-btn" onclick='rebookFromDelay(${JSON.stringify(delay).replace(/'/g, "\\'")})'>⚡ Rebook this</button></div>`
+                    : '';
+                
+                delayItem.innerHTML = `
+                    <div class="delay-flight">${delay.airline} ${delay.flight_number}</div>
+                    <div class="delay-details">
+                        <span>${delay.departure_airport} → ${delay.arrival_airport}</span>
+                        <span class="delay-time">Delayed ${delay.delay_minutes}min</span>
+                        <span>${scheduled.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} → ${actual.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                    ${rebookBtnHtml}
+                `;
+                
+                delaysList.appendChild(delayItem);
+            });
+        }
+        
+        // ── Rebook-from-Delay Flow ───────────────────────────────────
+        
+        async function rebookFromDelay(flight) {
+            // Disable all rebook buttons
+            document.querySelectorAll('.rebook-btn').forEach(btn => {
+                btn.disabled = true;
+                btn.textContent = '⏳ Loading...';
+            });
+            
+            addMessage('user', `My ${flight.airline} ${flight.flight_number} from ${flight.departure_airport} to ${flight.arrival_airport} is delayed by ${flight.delay_minutes} minutes. Can you rebook me?`);
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch('/api/rebook-start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ flight })
+                });
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                if (data.success) {
+                    addMessage('agent', data.summary);
+                    displayQuickQuestions(data.questions, flight);
+                } else {
+                    addMessage('agent', `Sorry, I couldn't start the rebooking: ${data.error}`);
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('agent', `Error: ${error.message}`);
+            }
+        }
+        
+        // Track current answers for quick questions
+        let _quickAnswers = {};
+        let _quickFlight = null;
+        let _quickQuestions = [];
+        let _quickStep = 0;
+        
+        function displayQuickQuestions(questions, flight) {
+            _quickAnswers = {};
+            _quickFlight = flight;
+            _quickQuestions = questions;
+            _quickStep = 0;
+            
+            // Apply defaults
+            questions.forEach(q => {
+                if (q.default) _quickAnswers[q.id] = q.default;
+            });
+            
+            // Show first question
+            _showQuickStep();
+        }
+        
+        function _showQuickStep() {
+            if (_quickStep >= _quickQuestions.length) {
+                // All answered — auto-submit
+                submitQuickAnswers();
+                return;
+            }
+            
+            const q = _quickQuestions[_quickStep];
+            const stepLabel = `${_quickStep + 1}/${_quickQuestions.length}`;
+            
+            const container = document.createElement('div');
+            container.className = 'quick-questions';
+            container.id = 'quick-q-current';
+            
+            let html = `<div class="quick-q-title"><span style="color: var(--hud-dim); font-weight: 400; font-size: 0.85em;">${stepLabel}</span> ${q.question}</div>`;
+            html += `<div class="quick-q-options">`;
+            q.options.forEach(opt => {
+                const sel = opt.value === q.default ? ' selected' : '';
+                html += `<div class="quick-option${sel}" onclick="pickQuickOption('${q.id}', '${opt.value}', this)">${opt.label}</div>`;
+            });
+            html += `</div>`;
+            
+            container.innerHTML = html;
+            
+            const messagesDiv = document.getElementById('chat-messages');
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'message agent';
+            wrapperDiv.id = 'quick-q-wrapper';
+            wrapperDiv.innerHTML = `<div class="message-avatar">🤖</div>`;
+            wrapperDiv.appendChild(container);
+            messagesDiv.appendChild(wrapperDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function pickQuickOption(qid, value, el) {
+            // Mark selected visually
+            el.parentElement.querySelectorAll('.quick-option').forEach(sib => sib.classList.remove('selected'));
+            el.classList.add('selected');
+            _quickAnswers[qid] = value;
+            
+            // Collapse this question — show a summary line in chat
+            const label = el.textContent;
+            addMessage('user', `${_quickQuestions[_quickStep].question}: ${label}`);
+            
+            // Remove the question panel
+            const wrapper = document.getElementById('quick-q-wrapper');
+            if (wrapper) wrapper.remove();
+            
+            // Advance to next question (or auto-submit)
+            _quickStep++;
+            
+            // Small delay for natural feel
+            setTimeout(() => _showQuickStep(), 300);
+        }
+        
+        async function submitQuickAnswers() {
+            showTypingIndicator();
+            
+            // Make sure question panel is gone
+            const wrapper = document.getElementById('quick-q-wrapper');
+            if (wrapper) wrapper.remove();
+            
+            try {
+                const response = await fetch('/api/rebook-confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        flight: _quickFlight,
+                        answers: _quickAnswers
+                    })
+                });
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                if (data.success) {
+                    addMessage('agent', data.response);
+                    if (data.options && data.options.length > 0) {
+                        displayOptions(data.options);
+                    }
+                } else {
+                    addMessage('agent', data.response || `Error: ${data.error}`);
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('agent', `Error: ${error.message}`);
+            }
+        }
+        
+        function showDelays() {
+            const panel = document.getElementById('delays-panel');
+            panel.classList.toggle('hidden');
+        }
+        
+        // ── API Call Tracker Functions ─────────────────────────────
+        
+        async function refreshTracker() {
+            try {
+                const response = await fetch('/api/tracker/summary');
+                const data = await response.json();
+                
+                // Update tracker bar
+                document.getElementById('total-calls').textContent = data.total_calls;
+                document.getElementById('total-cost').textContent = data.total_cost_usd.toFixed(3);
+                
+                const openai = data.by_service.openai || { count: 0 };
+                const atlas = data.by_service.atlas_cli || { count: 0 };
+                const aviation = data.by_service.aviationstack || { count: 0 };
+                
+                document.getElementById('openai-calls').textContent = openai.count;
+                document.getElementById('atlas-calls').textContent = atlas.count;
+                document.getElementById('aviation-calls').textContent = aviation.count;
+                
+                // Update simulate toggle state
+                document.getElementById('simulate-toggle').checked = data.simulate_delays;
+                
+            } catch (error) {
+                console.error('Failed to refresh tracker:', error);
+            }
+        }
+        
+        async function toggleSimulate() {
+            const enabled = document.getElementById('simulate-toggle').checked;
+            
+            try {
+                const response = await fetch('/api/tracker/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: enabled })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show notification
+                    const msg = enabled 
+                        ? 'DEMO mode active — showing simulated delays for demo purposes.'
+                        : 'LIVE mode — showing real-time delay data.';
+                    addMessage('agent', msg);
+                    
+                    // Refresh delays if we have an airport
+                    if (currentAirport) {
+                        fetchDelays(currentAirport);
+                    }
+                    
+                    // Refresh tracker
+                    refreshTracker();
+                }
+            } catch (error) {
+                console.error('Failed to toggle simulate:', error);
+            }
+        }
+        
+        // Refresh tracker every 5 seconds
+        setInterval(refreshTracker, 5000);
+        
+        // Initial tracker load
+        window.addEventListener('load', () => {
+            setTimeout(refreshTracker, 1000);
+        });
+        
+        // Initialize speech recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+            
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('chat-input').value = transcript;
+                stopRecording();
+            };
+            
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                stopRecording();
+            };
+            
+            recognition.onend = () => {
+                stopRecording();
+            };
+        }
+        
+        // Auto-resize textarea
+        const chatInput = document.getElementById('chat-input');
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+        
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // Send button
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+        
+        // Voice button
+        document.getElementById('voice-btn').addEventListener('click', toggleVoice);
+        
+        // Image button
+        document.getElementById('image-btn').addEventListener('click', () => {
+            document.getElementById('image-input').click();
+        });
+        
+        // Image input
+        document.getElementById('image-input').addEventListener('change', handleImageUpload);
+        
+        function toggleVoice() {
+            if (!recognition) {
+                addMessage('agent', 'Voice input is not supported in your browser. Please type your message instead.');
+                return;
+            }
+            
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+        
+        function startRecording() {
+            isRecording = true;
+            document.getElementById('voice-btn').classList.add('recording');
+            document.getElementById('voice-btn').textContent = '⏹';
+            recognition.start();
+        }
+        
+        function stopRecording() {
+            isRecording = false;
+            document.getElementById('voice-btn').classList.remove('recording');
+            document.getElementById('voice-btn').textContent = '🎤';
+            if (recognition) {
+                recognition.stop();
+            }
+        }
+        
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64 = e.target.result.split(',')[1];
+                sendImage(base64, file.name);
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            input.value = '';
+            input.style.height = 'auto';
+            
+            addMessage('user', message);
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                addMessage('agent', data.response);
+                
+                if (data.options) {
+                    displayOptions(data.options);
+                }
+                
+                if (data.checkpoint) {
+                    displayCheckpoint(data.checkpoint);
+                }
+                
+                if (data.state === 'complete') {
+                    showSuccess(data);
+                }
+                
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('agent', `Sorry, I encountered an error: ${error.message}`);
+            }
+        }
+        
+        async function sendImage(base64, filename) {
+            addMessage('user', `[Uploaded image: ${filename}]`);
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch('/api/analyze-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64 })
+                });
+                
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                addMessage('agent', data.response);
+                
+                if (data.extracted_info) {
+                    // Auto-fill form or start search
+                }
+                
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('agent', `Sorry, I couldn't analyze the image: ${error.message}`);
+            }
+        }
+        
+        function addMessage(role, content) {
+            const messagesDiv = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const avatar = role === 'agent' ? '🤖' : '👤';
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div class="message-content">${content}</div>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function showTypingIndicator() {
+            const messagesDiv = document.getElementById('chat-messages');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message agent';
+            typingDiv.id = 'typing-indicator';
+            
+            typingDiv.innerHTML = `
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.remove();
+        }
+        
+        function displayOptions(options) {
+            const optionsList = document.getElementById('options-list');
+            optionsList.innerHTML = '';
+            
+            options.forEach((option, index) => {
+                const optionCard = document.createElement('div');
+                optionCard.className = 'option-card';
+                optionCard.onclick = () => selectOption(index);
+                
+                const departure = new Date(option.departure);
+                const arrival = new Date(option.arrival);
+                
+                optionCard.innerHTML = `
+                    <div class="option-header">
+                        <div class="option-flight">${option.airline} ${option.flight_number}</div>
+                        <div class="option-price">$${option.price.toFixed(2)} ${option.currency}</div>
+                    </div>
+                    <div class="option-details">
+                        <span>📅 ${departure.toLocaleDateString([], {weekday: 'short', month: 'short', day: 'numeric'})}</span>
+                        <span>🛫 ${departure.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        <span>🛬 ${arrival.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        <span>⏱️ ${option.duration_minutes}min</span>
+                    </div>
+                    ${option.seats_available <= 3 ? `<div style="font-family: var(--mono); font-size: 0.75em; color: var(--grounded); margin-bottom: 4px;">⚠ Only ${option.seats_available} seats left</div>` : ''}
+                    ${!option.baggage_included ? `<div style="font-family: var(--mono); font-size: 0.75em; color: var(--caution); margin-bottom: 4px;">Baggage not included</div>` : ''}
+                    <div class="option-tradeoff">${option.tradeoff}</div>
+                `;
+                
+                optionsList.appendChild(optionCard);
+            });
+            
+            document.getElementById('options-section').classList.remove('hidden');
+        }
+        
+        async function selectOption(index) {
+            addMessage('user', `I'll take option ${index + 1}`);
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch('/api/select-option', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ option_index: index })
+                });
+                
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                if (data.success) {
+                    document.getElementById('options-section').classList.add('hidden');
+                    addMessage('agent', 'Great choice! Let me verify this option for you.');
+                    displayCheckpoint(data.checkpoint);
+                } else {
+                    addMessage('agent', `Sorry, there was an error: ${data.error}`);
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('agent', `Error: ${error.message}`);
+            }
+        }
+        
+        function displayCheckpoint(checkpoint) {
+            currentCheckpoint = checkpoint;
+            document.getElementById('checkpoint-section').classList.remove('hidden');
+            
+            const checkpointCard = document.getElementById('checkpoint-card');
+            checkpointCard.innerHTML = `
+                <div class="checkpoint-header">
+                    <div class="checkpoint-type">${checkpoint.checkpoint_type.replace('_', ' ').toUpperCase()}</div>
+                </div>
+                <div class="checkpoint-title">${checkpoint.title}</div>
+                
+                <div class="checkpoint-section">
+                    <h3>What I'm asking</h3>
+                    <p>${checkpoint.description}</p>
+                </div>
+                
+                <div class="checkpoint-section">
+                    <h3>Why</h3>
+                    <p>${checkpoint.reasoning}</p>
+                </div>
+                
+                <div class="checkpoint-section">
+                    <h3>What changed</h3>
+                    <p>${checkpoint.what_changed}</p>
+                </div>
+                
+                <div class="checkpoint-section">
+                    <h3>What will happen</h3>
+                    <div class="cli-command">$ ${checkpoint.cli_command}</div>
+                </div>
+                
+                <div class="checkpoint-actions">
+                    <button onclick="decideCheckpoint('approve')" class="btn btn-approve">✓ Approve</button>
+                    <button onclick="decideCheckpoint('reject')" class="btn btn-reject">✗ Reject</button>
+                </div>
+            `;
+            
+            addMessage('agent', `I need your approval to proceed. Please review the checkpoint above and let me know if you approve.`);
+        }
+        
+        async function decideCheckpoint(decision) {
+            document.getElementById('checkpoint-section').classList.add('hidden');
+            
+            const action = decision === 'approve' ? 'approved' : 'rejected';
+            addMessage('user', `I ${action} this checkpoint`);
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch(`/api/checkpoint/${currentCheckpoint.checkpoint_id}/decide`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision })
+                });
+                
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                if (data.success) {
+                    if (data.new_checkpoint) {
+                        addMessage('agent', 'Moving to the next step...');
+                        displayCheckpoint(data.new_checkpoint);
+                    } else if (data.state.state === 'complete') {
+                        showSuccess(data.state);
+                    } else {
+                        addMessage('agent', 'Processing your booking...');
+                    }
+                } else {
+                    addMessage('agent', `Sorry, there was an error: ${data.error}`);
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('agent', `Error: ${error.message}`);
+            }
+        }
+        
+        function showSuccess(state) {
+            document.getElementById('options-section').classList.add('hidden');
+            document.getElementById('checkpoint-section').classList.add('hidden');
+            document.getElementById('success-section').classList.remove('hidden');
+            
+            document.getElementById('ticket-details').innerHTML = `
+                <strong>Ticket Number:</strong> ${state.ticket_number}<br>
+                <strong>Order ID:</strong> ${state.order_id}<br>
+                <strong>Total Paid:</strong> $${state.confirmed_price.toFixed(2)}
+            `;
+            
+            addMessage('agent', '🎉 Great news! Your ticket has been issued successfully. You can download the complete audit trail using the button below. Safe travels!');
+        }
+
+        // ═══ TRIP PLANNER ═══════════════════════════════════
+        
+        function showTripForm() {
+            const container = document.createElement('div');
+            container.className = 'message agent';
+            container.id = 'trip-form-wrapper';
+            container.innerHTML = `<div class="message-avatar">✈️</div>`;
+            
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 7);
+            const returnDate = new Date(tomorrow);
+            returnDate.setDate(returnDate.getDate() + 3);
+            const fmt = d => d.toISOString().split('T')[0];
+            
+            const form = document.createElement('div');
+            form.className = 'trip-form';
+            form.innerHTML = `
+                <h3>✈️ Plan a Trip</h3>
+                <div class="trip-form-row">
+                    <div style="flex:1">
+                        <label>From</label>
+                        <input id="tf-origin" placeholder="KUL" value="KUL">
+                    </div>
+                    <div style="flex:1">
+                        <label>To</label>
+                        <input id="tf-dest" placeholder="Bali, SIN, BKK...">
+                    </div>
+                </div>
+                <div class="trip-form-row">
+                    <div style="flex:1">
+                        <label>Depart</label>
+                        <input type="date" id="tf-depart" value="${fmt(tomorrow)}">
+                    </div>
+                    <div style="flex:1">
+                        <label>Return</label>
+                        <input type="date" id="tf-return" value="${fmt(returnDate)}">
+                    </div>
+                </div>
+                <div class="trip-form-row">
+                    <div style="flex:1">
+                        <label>Travelers</label>
+                        <select id="tf-adults">
+                            <option value="1">1 adult</option>
+                            <option value="2" selected>2 adults</option>
+                            <option value="3">3 adults</option>
+                            <option value="4">4 adults</option>
+                        </select>
+                    </div>
+                    <div style="flex:1">
+                        <label>Budget (USD)</label>
+                        <input id="tf-budget" type="number" placeholder="1500" value="1500">
+                    </div>
+                </div>
+                <button class="trip-form-submit" id="trip-submit-btn" onclick="submitTripPlan()">🔍 Search Flights + Hotels</button>
+            `;
+            
+            container.appendChild(form);
+            
+            const messagesDiv = document.getElementById('chat-messages');
+            messagesDiv.appendChild(container);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        async function submitTripPlan() {
+            const origin = document.getElementById('tf-origin').value.trim().toUpperCase();
+            const dest = document.getElementById('tf-dest').value.trim();
+            const depart = document.getElementById('tf-depart').value;
+            const ret = document.getElementById('tf-return').value;
+            const adults = document.getElementById('tf-adults').value;
+            const budget = document.getElementById('tf-budget').value;
+            
+            if (!dest || !depart || !ret) {
+                addMessage('agent', 'Please fill in the destination and dates.');
+                return;
+            }
+            
+            // Disable button
+            const btn = document.getElementById('trip-submit-btn');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Searching...'; }
+            
+            // User message
+            const summary = `Plan a trip: ${origin} → ${dest}, ${depart} to ${ret}, ${adults} traveler(s), budget $${budget}`;
+            addMessage('user', summary);
+            
+            // Remove the form
+            const wrapper = document.getElementById('trip-form-wrapper');
+            if (wrapper) wrapper.remove();
+            
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch('/api/plan-trip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origin: origin,
+                        destination: dest,
+                        depart_date: depart,
+                        return_date: ret,
+                        adults: parseInt(adults),
+                        budget: parseFloat(budget) || 0,
+                        preferences: { pool: true }
+                    })
+                });
+                
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                if (data.success && data.packages && data.packages.length > 0) {
+                    addMessage('agent', `I found ${data.packages.length} trip packages for ${dest}! (${data.flight_count} flights, ${data.hotel_count} hotels searched)`);
+                    displayTripPackages(data.packages, parseFloat(budget) || 0);
+                } else {
+                    addMessage('agent', data.summary || data.response || 'Sorry, I couldn\'t find any packages for those criteria. Try a different destination or dates.');
+                }
+                
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('agent', `Sorry, I couldn't plan that trip: ${error.message}`);
+            }
+        }
+        
+        function displayTripPackages(packages, budget) {
+            const messagesDiv = document.getElementById('chat-messages');
+            
+            packages.forEach((pkg, index) => {
+                const card = document.createElement('div');
+                card.className = 'trip-package';
+                
+                const flight = pkg.flights && pkg.flights[0] ? pkg.flights[0] : null;
+                const hotel = pkg.hotel || null;
+                
+                const priceClass = pkg.over_budget ? 'trip-package-price over-budget' : 'trip-package-price';
+                const budgetNote = budget > 0 ? (pkg.over_budget ? ` ($${Math.round(pkg.total_price - budget)} over)` : ` ($${Math.round(budget - pkg.total_price)} under budget)`) : '';
+                
+                let body = '';
+                
+                if (flight) {
+                    const depTime = flight.departure_time || '';
+                    const arrTime = flight.arrival_time || '';
+                    // Parse YYYYMMDDHHMM → readable time
+                    const depReadable = depTime.length >= 12 ? `${depTime.slice(8,10)}:${depTime.slice(10,12)}` : depTime;
+                    const arrReadable = arrTime.length >= 12 ? `${arrTime.slice(8,10)}:${arrTime.slice(10,12)}` : arrTime;
+                    const depDate = depTime.length >= 8 ? `${depTime.slice(4,6)}/${depTime.slice(6,8)}` : '';
+                    
+                    body += `
+                        <div class="trip-package-row">
+                            <div class="trip-package-icon">🛫</div>
+                            <div class="trip-package-detail">
+                                <strong>${flight.airline || ''} ${flight.flight_number || ''}</strong>
+                                <div class="meta">${depReadable}→${arrReadable} · ${depDate} · ${flight.seats_available || '?'} seats</div>
+                            </div>
+                            <div class="meta">$${Math.round(pkg.flight_price)}</div>
+                        </div>
+                    `;
+                }
+                
+                if (hotel) {
+                    const stars = '⭐'.repeat(hotel.stars || 0);
+                    const amenities = [];
+                    if (hotel.has_pool) amenities.push('pool');
+                    if (hotel.free_cancellation) amenities.push('free cancel');
+                    if (hotel.breakfast_included) amenities.push('breakfast');
+                    
+                    body += `
+                        <div class="trip-package-row">
+                            <div class="trip-package-icon">🏨</div>
+                            <div class="trip-package-detail">
+                                <strong>${hotel.name || 'Hotel'}</strong> ${stars}
+                                <div class="meta">${hotel.area || ''} · ${hotel.rating || '?'}/5 · ${hotel.nights || '?'} nights · ${amenities.join(', ')}</div>
+                            </div>
+                            <div class="meta">$${Math.round(pkg.hotel_price)}</div>
+                        </div>
+                    `;
+                }
+                
+                if (pkg.reasoning) {
+                    body += `<div class="trip-package-reason">💡 ${pkg.reasoning}</div>`;
+                }
+                
+                card.innerHTML = `
+                    <div class="trip-package-header">
+                        <div class="trip-package-label">${pkg.label || 'Package'}</div>
+                        <div class="${priceClass}">$${Math.round(pkg.total_price)}${budgetNote}</div>
+                    </div>
+                    <div class="trip-package-body">
+                        ${body}
+                    </div>
+                `;
+                
+                messagesDiv.appendChild(card);
+            });
+            
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>

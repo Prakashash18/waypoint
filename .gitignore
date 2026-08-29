@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.py[cod]
+.env
+.cache/
+src/ui/static/captures/*.png
+tests/api_smoke_results.json
+.DS_Store

@@ -1,0 +1,387 @@
+"""AmadeusHotelsTool — hotel search via Amadeus Self-Service API (sandbox).
+
+OAuth2 client-credentials flow → location resolution → hotel-offers search.
+Falls back to simulated data from HotelsTool when API keys are absent or
+the API returns an error.
+
+Capabilities: search_hotels
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import requests
+
+from .base import ToolBase, ToolCapability, ToolError, ToolResult, ToolStatus
+
+logger = logging.getLogger(__name__)
+
+
+class AmadeusHotelsTool(ToolBase):
+    """Hotel search via Amadeus test/sandbox API."""
+
+    AUTH_URL = 'https://test.api.amadeus.com/v1/security/oauth/2/token'
+    LOCATIONS_URL = 'https://test.api.amadeus.com/v1/reference-data/locations'
+    HOTEL_OFFERS_URL = 'https://test.api.amadeus.com/v3/shopping/hotel-offers'
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        api_secret: Optional[str] = None,
+    ):
+        self._api_key = api_key or os.getenv('AMADEUS_API_KEY', '')
+        self._api_secret = api_secret or os.getenv('AMADEUS_API_SECRET', '')
+        self._access_token: Optional[str] = None
+        self._token_expiry: float = 0.0
+
+    # ── ToolBase interface ────────────────────────────────────────
+
+    @property
+    def name(self) -> str:
+        return 'hotels'
+
+    @property
+    def description(self) -> str:
+        return 'Search hotels via Amadeus API'
+
+    @property
+    def capabilities(self) -> List[ToolCapability]:
+        return [
+            ToolCapability(
+                name='search_hotels',
+                description='Search available hotels for given dates and guests',
+                parameters={
+                    'destination': 'City name or airport code (e.g. Bali, DPS)',
+                    'check_in': 'Check-in date YYYY-MM-DD',
+                    'check_out': 'Check-out date YYYY-MM-DD',
+                    'adults': 'Number of adults (default 2)',
+                    'children': 'Number of children (default 0)',
+                    'currency': 'Currency code (default USD)',
+                    'locale': 'Locale (default en-us)',
+                },
+                returns='list[HotelOffer]',
+            ),
+        ]
+
+    def execute(self, capability: str, params: Dict[str, Any]) -> ToolResult:
+        if capability == 'search_hotels':
+            return self._search_hotels(params)
+        raise ToolError(
+            f"Unknown capability: {capability}",
+            tool_name=self.name,
+            capability=capability,
+        )
+
+    # ── OAuth2 token management ───────────────────────────────────
+
+    def _ensure_token(self) -> bool:
+        """Obtain or refresh the OAuth2 access token. Returns True on success."""
+        if self._access_token and time.time() < self._token_expiry - 30:
+            return True  # still valid
+
+        if not self._api_key or not self._api_secret:
+            return False
+
+        try:
+            resp = requests.post(
+                self.AUTH_URL,
+                data={
+                    'grant_type': 'client_credentials',
+                    'client_id': self._api_key,
+                    'client_secret': self._api_secret,
+                },
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Amadeus auth failed: {resp.status_code}")
+                return False
+
+            payload = resp.json()
+            self._access_token = payload['access_token']
+            self._token_expiry = time.time() + payload.get('expires_in', 1799)
+
+            # Track the auth call
+            self._track('amadeus_auth', 'oauth/token', status='success')
+            return True
+
+        except Exception as exc:
+            logger.warning(f"Amadeus auth error: {exc}")
+            self._track('amadeus_auth', 'oauth/token', status='error')
+            return False
+
+    def _auth_headers(self) -> Dict[str, str]:
+        return {'Authorization': f'Bearer {self._access_token}'}
+
+    # ── Search flow ───────────────────────────────────────────────
+
+    def _search_hotels(self, params: Dict[str, Any]) -> ToolResult:
+        destination = params.get('destination', '')
+        check_in = params.get('check_in', '')
+        check_out = params.get('check_out', '')
+        adults = params.get('adults', 2)
+        currency = params.get('currency', 'USD')
+
+        if not all([destination, check_in, check_out]):
+            return ToolResult(
+                status=ToolStatus.ERROR,
+                message='destination, check_in, and check_out are required',
+                error='Missing required parameters',
+            )
+
+        # If no API keys, go straight to simulated fallback
+        if not self._api_key or not self._api_secret:
+            logger.info("No Amadeus keys set — using simulated hotel data")
+            return self._fallback_simulated(destination, check_in, check_out, adults)
+
+        # Authenticate
+        if not self._ensure_token():
+            return self._fallback_simulated(destination, check_in, check_out, adults)
+
+        # Step 1: Resolve destination → city IATA code
+        city_code = self._resolve_city_code(destination)
+        if not city_code:
+            return self._fallback_simulated(destination, check_in, check_out, adults)
+
+        # Step 2: Search hotel offers
+        return self._search_hotel_offers(
+            city_code, destination, check_in, check_out, adults, currency,
+        )
+
+    def _resolve_city_code(self, destination: str) -> Optional[str]:
+        """Resolve a destination string to an IATA city code."""
+        try:
+            resp = requests.get(
+                self.LOCATIONS_URL,
+                params={'keyword': destination, 'subType': 'CITY'},
+                headers=self._auth_headers(),
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Amadeus location lookup failed: {resp.status_code}")
+                return None
+
+            data = resp.json().get('data', [])
+            if not data:
+                return None
+
+            return data[0].get('iataCode')
+
+        except Exception as exc:
+            logger.warning(f"Amadeus location error: {exc}")
+            return None
+
+    def _search_hotel_offers(
+        self,
+        city_code: str,
+        destination: str,
+        check_in: str,
+        check_out: str,
+        adults: int,
+        currency: str,
+    ) -> ToolResult:
+        """Call Amadeus hotel-offers endpoint and normalise results."""
+        try:
+            resp = requests.get(
+                self.HOTEL_OFFERS_URL,
+                params={
+                    'cityCode': city_code,
+                    'checkInDate': check_in,
+                    'checkOutDate': check_out,
+                    'adults': adults,
+                    'currency': currency,
+                },
+                headers=self._auth_headers(),
+                timeout=15,
+            )
+
+            self._track(
+                'amadeus_search', 'shopping/hotel-offers',
+                status='success' if resp.status_code == 200 else 'error',
+            )
+
+            if resp.status_code != 200:
+                logger.warning(f"Amadeus hotel search failed: {resp.status_code}")
+                return self._fallback_simulated(destination, check_in, check_out, adults)
+
+            offers_data = resp.json().get('data', [])
+            if not offers_data:
+                return ToolResult(
+                    status=ToolStatus.NO_RESULTS,
+                    message=f'No hotels found in {destination}',
+                    data={'destination': destination, 'hotels': []},
+                )
+
+            nights = self._calc_nights(check_in, check_out)
+            hotels = [
+                self._normalize_offer(offer, check_in, check_out, nights, currency)
+                for offer in offers_data[:20]
+            ]
+
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={
+                    'destination': destination,
+                    'check_in': check_in,
+                    'check_out': check_out,
+                    'hotels': hotels,
+                    'count': len(hotels),
+                    'source': 'amadeus',
+                },
+                message=f'Found {len(hotels)} hotels in {destination}',
+            )
+
+        except requests.Timeout:
+            logger.warning("Amadeus hotel search timed out, falling back to simulated")
+            self._track('amadeus_search', 'shopping/hotel-offers', status='error')
+            return self._fallback_simulated(destination, check_in, check_out, adults)
+        except Exception as exc:
+            logger.warning(f"Amadeus hotel search error: {exc}")
+            self._track('amadeus_search', 'shopping/hotel-offers', status='error')
+            return self._fallback_simulated(destination, check_in, check_out, adults)
+
+    # ── Normalisation ─────────────────────────────────────────────
+
+    @staticmethod
+    def _normalize_offer(
+        offer: Dict[str, Any],
+        check_in: str,
+        check_out: str,
+        nights: int,
+        currency: str,
+    ) -> Dict[str, Any]:
+        """Normalise an Amadeus hotel-offer into the canonical 17-field dict."""
+        hotel = offer.get('hotel', {})
+        hotel_id = hotel.get('hotelId', offer.get('id', ''))
+        hotel_name = hotel.get('name', hotel.get('chainCode', ''))
+        city_code = hotel.get('cityCode', '')
+        stars_raw = hotel.get('rating', 0)
+        try:
+            stars = int(stars_raw) if stars_raw else 0
+        except (TypeError, ValueError):
+            stars = 0
+
+        # Amadeus doesn't always supply user ratings; default gracefully
+        rating = float(hotel.get('rating', 0) or 0)
+        review_count = 0
+
+        # Room / offer price
+        offer_price = offer.get('price', {})
+        try:
+            total_price = float(offer_price.get('total', 0))
+        except (TypeError, ValueError):
+            total_price = 0.0
+
+        price_per_night = round(total_price / nights, 2) if nights > 0 else total_price
+
+        # Amenities
+        amenities_list: List[str] = []
+        room = offer.get('room', {})
+        for amenity in room.get('amenities', []):
+            amenities_list.append(amenity.get('name', str(amenity)))
+        # Also check hotel-level facilities
+        for fac in hotel.get('facilities', []):
+            fac_name = fac.get('name', str(fac))
+            if fac_name not in amenities_list:
+                amenities_list.append(fac_name)
+
+        has_pool = any(
+            'pool' in a.lower() for a in amenities_list
+        )
+
+        # Cancellation / breakfast
+        policies = offer.get('policies', {})
+        free_cancellation = False
+        cancel_policy = policies.get('cancellation', {})
+        if isinstance(cancel_policy, dict):
+            free_cancellation = cancel_policy.get('type', '').lower() == 'free'
+        elif isinstance(cancel_policy, str):
+            free_cancellation = 'free' in cancel_policy.lower()
+
+        breakfast_included = False
+        meal_plan = offer.get('mealPlan', '') or ''
+        if 'breakfast' in meal_plan.lower() or 'breakfast' in str(policies).lower():
+            breakfast_included = True
+
+        rooms_available = offer.get('availability', {}).get('rooms', 5)
+        try:
+            rooms_available = int(rooms_available)
+        except (TypeError, ValueError):
+            rooms_available = 5
+
+        room_type = room.get('type', room.get('typeEstimated', {}).get('category', 'Standard'))
+
+        image_url = ''
+        media = hotel.get('media', [])
+        if media:
+            image_url = media[0].get('uri', media[0].get('url', ''))
+
+        return {
+            'hotel_id': str(hotel_id),
+            'name': hotel_name,
+            'area': city_code,
+            'stars': stars,
+            'rating': rating,
+            'review_count': review_count,
+            'price_per_night': price_per_night,
+            'total_price': round(total_price, 2),
+            'currency': currency,
+            'check_in': check_in,
+            'check_out': check_out,
+            'nights': nights,
+            'amenities': amenities_list,
+            'has_pool': has_pool,
+            'free_cancellation': free_cancellation,
+            'breakfast_included': breakfast_included,
+            'rooms_available': rooms_available,
+            'room_type': room_type,
+            'image_url': image_url,
+            'source': 'amadeus',
+        }
+
+    # ── Helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _calc_nights(check_in: str, check_out: str) -> int:
+        try:
+            ci = datetime.strptime(check_in, '%Y-%m-%d')
+            co = datetime.strptime(check_out, '%Y-%m-%d')
+            return max(1, (co - ci).days)
+        except ValueError:
+            return 2
+
+    @staticmethod
+    def _fallback_simulated(
+        destination: str,
+        check_in: str,
+        check_out: str,
+        adults: int,
+    ) -> ToolResult:
+        """Delegate to HotelsTool's simulated data generator."""
+        from .hotels_tool import HotelsTool
+        return HotelsTool()._search_simulated(destination, check_in, check_out, adults)
+
+    @staticmethod
+    def _track(service: str, endpoint: str, status: str = 'success', duration_ms: int = 0):
+        """Record an API call via the global tracker (best-effort)."""
+        try:
+            from src.agent.api_tracker import APICall, tracker
+            tracker.record(APICall(
+                timestamp=datetime.utcnow(),
+                service=service,
+                endpoint=endpoint,
+                cost_usd=0.0,
+                status=status,
+                duration_ms=duration_ms,
+            ))
+        except Exception:
+            pass
+
+
+# Auto-register on import
+from .registry import tool_registry
+tool_registry.register(AmadeusHotelsTool())

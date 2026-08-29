@@ -1,0 +1,373 @@
+"""HotelsTool — hotel search via RapidAPI Booking.com wrapper.
+
+Phase 1: RapidAPI Booking.com (instant access, no partnership needed)
+Phase 2: Amadeus Self-Service API (real bookings, free sandbox)
+
+Capabilities: search_hotels
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import random
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import requests
+
+from .base import ToolBase, ToolCapability, ToolError, ToolResult, ToolStatus
+
+logger = logging.getLogger(__name__)
+
+
+class HotelsTool(ToolBase):
+    """Hotel search and availability."""
+    
+    RAPIDAPI_HOST = 'booking-com.p.rapidapi.com'
+    RAPIDAPI_BASE = 'https://booking-com.p.rapidapi.com'
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self._api_key = api_key or os.getenv('RAPIDAPI_KEY', '')
+    
+    @property
+    def name(self) -> str:
+        return 'hotels'
+    
+    @property
+    def description(self) -> str:
+        return 'Search hotels and check availability'
+    
+    @property
+    def capabilities(self) -> List[ToolCapability]:
+        return [
+            ToolCapability(
+                name='search_hotels',
+                description='Search available hotels for given dates and guests',
+                parameters={
+                    'destination': 'City name or airport code (e.g. Bali, DPS)',
+                    'check_in': 'Check-in date YYYY-MM-DD',
+                    'check_out': 'Check-out date YYYY-MM-DD',
+                    'adults': 'Number of adults (default 2)',
+                    'children': 'Number of children (default 0)',
+                    'currency': 'Currency code (default USD)',
+                    'locale': 'Locale (default en-us)',
+                },
+                returns='list[HotelOffer]',
+            ),
+        ]
+    
+    def execute(self, capability: str, params: Dict[str, Any]) -> ToolResult:
+        if capability == 'search_hotels':
+            return self._search_hotels(params)
+        else:
+            raise ToolError(
+                f"Unknown capability: {capability}",
+                tool_name=self.name,
+                capability=capability,
+            )
+    
+    def _search_hotels(self, params: Dict[str, Any]) -> ToolResult:
+        destination = params.get('destination', '')
+        check_in = params.get('check_in', '')
+        check_out = params.get('check_out', '')
+        adults = params.get('adults', 2)
+        children = params.get('children', 0)
+        currency = params.get('currency', 'USD')
+        locale = params.get('locale', 'en-us')
+        
+        if not all([destination, check_in, check_out]):
+            return ToolResult(
+                status=ToolStatus.ERROR,
+                message='destination, check_in, and check_out are required',
+                error='Missing required parameters',
+            )
+        
+        # Try real API if key is available
+        if self._api_key:
+            return self._search_via_rapidapi(
+                destination, check_in, check_out,
+                adults, children, currency, locale,
+            )
+        
+        # Fallback to simulated data for demo
+        logger.info("No RAPIDAPI_KEY set — using simulated hotel data")
+        return self._search_simulated(
+            destination, check_in, check_out, adults,
+        )
+    
+    def _search_via_rapidapi(
+        self,
+        destination: str,
+        check_in: str,
+        check_out: str,
+        adults: int,
+        children: int,
+        currency: str,
+        locale: str,
+    ) -> ToolResult:
+        """Search hotels via RapidAPI Booking.com wrapper."""
+        try:
+            # Step 1: Resolve destination to a Booking.com destination ID
+            search_dest_url = f"{self.RAPIDAPI_BASE}/v1/hotels/searchDestination"
+            headers = {
+                'X-RapidAPI-Key': self._api_key,
+                'X-RapidAPI-Host': self.RAPIDAPI_HOST,
+            }
+            
+            dest_resp = requests.get(
+                search_dest_url,
+                params={'name': destination},
+                headers=headers,
+                timeout=10,
+            )
+            
+            if dest_resp.status_code != 200:
+                logger.warning(f"RapidAPI destination search failed: {dest_resp.status_code}")
+                return self._search_simulated(destination, check_in, check_out, adults)
+            
+            dest_data = dest_resp.json()
+            if not dest_data or not isinstance(dest_data, list):
+                return self._search_simulated(destination, check_in, check_out, adults)
+            
+            dest_id = dest_data[0].get('dest_id', '')
+            search_type = dest_data[0].get('search_type', 'city')
+            
+            # Step 2: Search hotels
+            search_url = f"{self.RAPIDAPI_BASE}/v1/hotels/searchHotels"
+            hotel_resp = requests.get(
+                search_url,
+                params={
+                    'dest_id': dest_id,
+                    'search_type': search_type,
+                    'arrival_date': check_in,
+                    'departure_date': check_out,
+                    'adults_number': adults,
+                    'children_number': children,
+                    'room_number': 1,
+                    'units': 'metric',
+                    'order_by': 'popularity',
+                    'filter_by_currency': currency,
+                    'locale': locale,
+                    'page_number': 0,
+                },
+                headers=headers,
+                timeout=15,
+            )
+            
+            if hotel_resp.status_code != 200:
+                logger.warning(f"RapidAPI hotel search failed: {hotel_resp.status_code}")
+                return self._search_simulated(destination, check_in, check_out, adults)
+            
+            hotel_data = hotel_resp.json()
+            hotels = hotel_data.get('result', [])
+            
+            if not hotels:
+                return ToolResult(
+                    status=ToolStatus.NO_RESULTS,
+                    message=f'No hotels found in {destination}',
+                    data={'destination': destination, 'hotels': []},
+                )
+            
+            # Normalize results
+            normalized = [self._normalize_hotel(h, check_in, check_out) for h in hotels[:20]]
+            
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={
+                    'destination': destination,
+                    'check_in': check_in,
+                    'check_out': check_out,
+                    'hotels': normalized,
+                    'count': len(normalized),
+                    'source': 'booking.com',
+                },
+                message=f'Found {len(normalized)} hotels in {destination}',
+                raw_response={'dest_id': dest_id},
+            )
+            
+        except requests.Timeout:
+            logger.warning("RapidAPI timed out, falling back to simulated")
+            return self._search_simulated(destination, check_in, check_out, adults)
+        except Exception as e:
+            logger.warning(f"RapidAPI error: {e}, falling back to simulated")
+            return self._search_simulated(destination, check_in, check_out, adults)
+    
+    def _search_simulated(
+        self,
+        destination: str,
+        check_in: str,
+        check_out: str,
+        adults: int,
+    ) -> ToolResult:
+        """Generate simulated hotel data for demo purposes."""
+        
+        # Destination-specific hotel templates
+        hotel_templates = {
+            'Bali': [
+                {'name': 'Ubud Village Hotel', 'area': 'Ubud', 'stars': 4, 'has_pool': True, 'base_price': 65},
+                {'name': 'Seminyak Beach Resort', 'area': 'Seminyak', 'stars': 5, 'has_pool': True, 'base_price': 120},
+                {'name': 'Kuta Beach Inn', 'area': 'Kuta', 'stars': 3, 'has_pool': True, 'base_price': 35},
+                {'name': 'Nusa Dua Palace', 'area': 'Nusa Dua', 'stars': 5, 'has_pool': True, 'base_price': 150},
+                {'name': 'Canggu Surf Lodge', 'area': 'Canggu', 'stars': 3, 'has_pool': True, 'base_price': 45},
+                {'name': 'Jimbaran Bay Villas', 'area': 'Jimbaran', 'stars': 4, 'has_pool': True, 'base_price': 95},
+                {'name': 'Sanur Garden Hotel', 'area': 'Sanur', 'stars': 3, 'has_pool': True, 'base_price': 40},
+                {'name': 'Ubud Rice Terrace Retreat', 'area': 'Ubud', 'stars': 4, 'has_pool': True, 'base_price': 80},
+            ],
+            'DPS': [
+                {'name': 'Ubud Village Hotel', 'area': 'Ubud', 'stars': 4, 'has_pool': True, 'base_price': 65},
+                {'name': 'Seminyak Beach Resort', 'area': 'Seminyak', 'stars': 5, 'has_pool': True, 'base_price': 120},
+                {'name': 'Kuta Beach Inn', 'area': 'Kuta', 'stars': 3, 'has_pool': True, 'base_price': 35},
+                {'name': 'Nusa Dua Palace', 'area': 'Nusa Dua', 'stars': 5, 'has_pool': True, 'base_price': 150},
+                {'name': 'Canggu Surf Lodge', 'area': 'Canggu', 'stars': 3, 'has_pool': True, 'base_price': 45},
+            ],
+            'Singapore': [
+                {'name': 'Marina Bay Sands', 'area': 'Marina Bay', 'stars': 5, 'has_pool': True, 'base_price': 350},
+                {'name': 'Hotel G Singapore', 'area': 'Bugis', 'stars': 4, 'has_pool': True, 'base_price': 120},
+                {'name': 'V Hotel Lavender', 'area': 'Lavender', 'stars': 3, 'has_pool': True, 'base_price': 80},
+                {'name': 'The Pod Boutique Hotel', 'area': 'Kampong Glam', 'stars': 3, 'has_pool': False, 'base_price': 55},
+                {'name': 'Carlton Hotel Singapore', 'area': 'City Hall', 'stars': 5, 'has_pool': True, 'base_price': 180},
+            ],
+            'SIN': [
+                {'name': 'Marina Bay Sands', 'area': 'Marina Bay', 'stars': 5, 'has_pool': True, 'base_price': 350},
+                {'name': 'Hotel G Singapore', 'area': 'Bugis', 'stars': 4, 'has_pool': True, 'base_price': 120},
+                {'name': 'V Hotel Lavender', 'area': 'Lavender', 'stars': 3, 'has_pool': True, 'base_price': 80},
+            ],
+            'Bangkok': [
+                {'name': 'Sukhumvit Park Hotel', 'area': 'Sukhumvit', 'stars': 4, 'has_pool': True, 'base_price': 55},
+                {'name': 'Riverside Palace Bangkok', 'area': 'Riverside', 'stars': 5, 'has_pool': True, 'base_price': 130},
+                {'name': 'Khao San Road Hostel', 'area': 'Khao San', 'stars': 2, 'has_pool': False, 'base_price': 15},
+                {'name': 'Siam Luxury Suites', 'area': 'Siam', 'stars': 5, 'has_pool': True, 'base_price': 160},
+                {'name': 'Silom City Hotel', 'area': 'Silom', 'stars': 3, 'has_pool': True, 'base_price': 40},
+            ],
+        }
+        
+        # Pick hotel set for destination (case-insensitive)
+        dest_key = None
+        for key in hotel_templates:
+            if key.lower() == destination.lower():
+                dest_key = key
+                break
+        
+        templates = hotel_templates.get(dest_key, hotel_templates.get('Bali', []))
+        
+        # Calculate nights
+        try:
+            ci = datetime.strptime(check_in, '%Y-%m-%d')
+            co = datetime.strptime(check_out, '%Y-%m-%d')
+            nights = max(1, (co - ci).days)
+        except ValueError:
+            nights = 2
+        
+        # Generate offers with some price variation
+        hotels = []
+        for i, tmpl in enumerate(templates):
+            # Add ±15% price variation
+            price_var = random.uniform(0.85, 1.15)
+            price_per_night = round(tmpl['base_price'] * price_var, 2)
+            total_price = round(price_per_night * nights, 2)
+            
+            hotels.append({
+                'hotel_id': f"sim_{destination}_{i+1}",
+                'name': tmpl['name'],
+                'area': tmpl['area'],
+                'stars': tmpl['stars'],
+                'rating': round(random.uniform(3.8, 4.9), 1),
+                'review_count': random.randint(120, 3500),
+                'price_per_night': price_per_night,
+                'total_price': total_price,
+                'currency': 'USD',
+                'check_in': check_in,
+                'check_out': check_out,
+                'nights': nights,
+                'amenities': self._generate_amenities(tmpl),
+                'has_pool': tmpl['has_pool'],
+                'free_cancellation': random.choice([True, True, False]),
+                'breakfast_included': random.choice([True, False, False]),
+                'rooms_available': random.randint(2, 12),
+                'room_type': random.choice(['Standard', 'Deluxe', 'Superior', 'Suite']),
+                'image_url': '',
+                'source': 'simulated',
+            })
+        
+        # Sort by popularity (random for sim)
+        random.shuffle(hotels)
+        
+        return ToolResult(
+            status=ToolStatus.SUCCESS,
+            data={
+                'destination': destination,
+                'check_in': check_in,
+                'check_out': check_out,
+                'hotels': hotels,
+                'count': len(hotels),
+                'source': 'simulated',
+            },
+            message=f'Found {len(hotels)} hotels in {destination} ({nights} nights)',
+        )
+    
+    @staticmethod
+    def _normalize_hotel(raw: Dict[str, Any], check_in: str, check_out: str) -> Dict[str, Any]:
+        """Normalize a Booking.com hotel response into consistent shape."""
+        # Calculate nights
+        try:
+            ci = datetime.strptime(check_in, '%Y-%m-%d')
+            co = datetime.strptime(check_out, '%Y-%m-%d')
+            nights = max(1, (co - ci).days)
+        except ValueError:
+            nights = 1
+        
+        # Extract price — Booking.com nests it deep
+        blocks = raw.get('blocks', [{}])
+        block = blocks[0] if blocks else {}
+        price_raw = block.get('final_price', raw.get('min_total_price', 0))
+        try:
+            total_price = float(price_raw)
+        except (TypeError, ValueError):
+            total_price = 0
+        
+        price_per_night = round(total_price / nights, 2) if nights > 0 else total_price
+        
+        # Extract amenities
+        facilities = raw.get('facility_ids', [])
+        has_pool = any(f in [72, 433] for f in facilities)  # Pool facility IDs
+        
+        return {
+            'hotel_id': str(raw.get('hotel_id', raw.get('id', ''))),
+            'name': raw.get('hotel_name', raw.get('name', '')),
+            'area': raw.get('district', raw.get('city_name_en', '')),
+            'stars': raw.get('class', 0),
+            'rating': raw.get('review_score', 0),
+            'review_count': raw.get('review_nr', 0),
+            'price_per_night': price_per_night,
+            'total_price': total_price,
+            'currency': 'USD',
+            'check_in': check_in,
+            'check_out': check_out,
+            'nights': nights,
+            'amenities': [],
+            'has_pool': has_pool,
+            'free_cancellation': block.get('free_cancellation', False),
+            'breakfast_included': block.get('has_free_breakfast', False),
+            'rooms_available': raw.get('rooms_left', 5),
+            'room_type': block.get('room_name', 'Standard'),
+            'image_url': raw.get('max_photo_url', ''),
+            'source': 'booking.com',
+        }
+    
+    @staticmethod
+    def _generate_amenities(tmpl: Dict[str, Any]) -> List[str]:
+        """Generate amenities list based on hotel template."""
+        amenities = ['Free WiFi', 'Air Conditioning']
+        if tmpl.get('has_pool'):
+            amenities.append('Swimming Pool')
+        if tmpl['stars'] >= 4:
+            amenities.extend(['Gym', 'Restaurant'])
+        if tmpl['stars'] >= 5:
+            amenities.extend(['Spa', 'Room Service 24h'])
+        return amenities
+
+
+# Auto-register on import
+from .registry import tool_registry
+tool_registry.register(HotelsTool())
