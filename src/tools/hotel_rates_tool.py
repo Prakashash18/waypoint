@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
 
 RAPIDAPI_HOST = 'booking-com15.p.rapidapi.com'
 BASE = f'https://{RAPIDAPI_HOST}/api/v1'
-CACHE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '.cache', 'hotel_rates')
+# Overridable so a container keeps its cache on a mounted disk and does not
+# re-spend the metered free tier after every restart.
+CACHE_DIR = os.getenv(
+    'WAYPOINT_CACHE_DIR',
+    os.path.join(os.path.dirname(__file__), '..', '..', '.cache', 'hotel_rates'))
 CACHE_TTL = 6 * 3600  # Rates move slowly enough that 6h is safe and saves quota.
 
 ATTRIBUTION = 'Rates, review scores and photos from Booking.com via RapidAPI'

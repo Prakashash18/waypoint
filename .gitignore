@@ -7,3 +7,4 @@ src/ui/static/captures/*.png
 tests/api_smoke_results.json
 .DS_Store
 web/node_modules/
+src/ui/agent-app/

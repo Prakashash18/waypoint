@@ -1,0 +1,22 @@
+# Render blueprint. Deploy with: render.com -> New -> Blueprint -> point at this repo.
+services:
+  - type: web
+    name: waypoint
+    runtime: docker
+    plan: starter          # a persistent disk requires a paid instance type
+    healthCheckPath: /api/health
+    disk:
+      name: waypoint-data
+      mountPath: /data     # Atlas keyring, screenshots, rate cache
+      sizeGB: 1
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false        # set these in the Render dashboard, never in git
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: AVIATIONSTACK_API_KEY
+        sync: false
+      - key: PORT
+        value: 8000

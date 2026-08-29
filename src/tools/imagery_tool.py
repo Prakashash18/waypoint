@@ -33,7 +33,10 @@ USER_AGENT = 'Waypoint/1.0 (travel planning agent; +https://github.com/waypoint)
 BROWSER_UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
               '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36')
 
-CAPTURE_DIR = os.path.join(os.path.dirname(__file__), '..', 'ui', 'static', 'captures')
+# Overridable so a container can put captures on a mounted disk.
+CAPTURE_DIR = os.getenv(
+    'WAYPOINT_CAPTURE_DIR',
+    os.path.join(os.path.dirname(__file__), '..', 'ui', 'static', 'captures'))
 CAPTURE_URL_PREFIX = '/static/captures'
 
 COMMONS_API = 'https://commons.wikimedia.org/w/api.php'

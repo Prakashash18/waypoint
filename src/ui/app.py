@@ -681,16 +681,48 @@ def agent_stream():
                              'X-Accel-Buffering': 'no'})
 
 
+@app.route('/api/health')
+def health():
+    """Liveness plus a readiness summary, for the platform and for humans."""
+    from src.tools import tool_registry
+
+    atlas_ok, atlas_note = _atlas_status()
+    rates = tool_registry.get('hotel_rates')
+    ready = {
+        'openai': bool(os.getenv('OPENAI_API_KEY')),
+        'atlas_cli': atlas_ok,
+        'hotel_rates': bool(getattr(rates, 'configured', False)),
+        'screenshots': _playwright_available(),
+        'voice': bool(os.getenv('ELEVENLABS_API_KEY')),
+        'delays': bool(os.getenv('AVIATIONSTACK_API_KEY')),
+    }
+    # The app is up and useful as long as it can plan; individual providers
+    # degrade honestly on their own.
+    return jsonify({
+        'status': 'ok' if ready['openai'] else 'degraded',
+        'ready': ready,
+        'notes': {k: v for k, v in (('atlas_cli', atlas_note),) if v},
+        'tools': len(tool_registry.list_tools()),
+    }), 200
+
+
 @app.route('/api/sources', methods=['GET'])
 def list_sources():
     """Which data providers are configured, so the UI can be honest up front."""
     from src.tools import tool_registry
     rates = tool_registry.get('hotel_rates')
+
+    # Atlas needs an interactive login, so on a fresh deploy it is often
+    # installed but not authenticated. Claiming it is configured would be the
+    # kind of confident-but-wrong answer this app exists to avoid.
+    atlas_ok, atlas_note = _atlas_status()
+
     return jsonify({
         'sources': [
             {'id': 'atlas_cli', 'label': 'Atlas CLI',
              'provides': 'real bookable flights',
-             'configured': True},
+             'configured': atlas_ok,
+             'note': atlas_note},
             {'id': 'booking_rapidapi', 'label': 'Booking.com (RapidAPI)',
              'provides': 'hotel rates, review scores, photographs',
              'configured': bool(getattr(rates, 'configured', False))},
@@ -728,6 +760,36 @@ def _agent():
         from src.agent.trip_agent import TripAgent
         _agent_singleton = TripAgent()
     return _agent_singleton
+
+
+def _atlas_status():
+    """Whether the Atlas CLI is installed and logged in.
+
+    Cached briefly: this runs on every page load and shells out.
+    """
+    import shutil
+    import subprocess
+    import time as _time
+
+    cached = getattr(_atlas_status, '_cache', None)
+    if cached and _time.time() - cached[0] < 60:
+        return cached[1], cached[2]
+
+    ok, note = False, ''
+    if not shutil.which('atlas-flight'):
+        note = 'atlas-flight is not installed on this host'
+    else:
+        try:
+            proc = subprocess.run(['atlas-flight', 'auth', 'status', '--json'],
+                                  capture_output=True, text=True, timeout=15)
+            payload = json.loads(proc.stdout or '{}')
+            ok = bool((payload.get('data') or {}).get('authenticated'))
+            note = '' if ok else 'installed but not logged in — run: atlas-flight auth login'
+        except Exception as exc:
+            note = f'could not check Atlas auth: {type(exc).__name__}'
+
+    _atlas_status._cache = (_time.time(), ok, note)
+    return ok, note
 
 
 def _playwright_available() -> bool:

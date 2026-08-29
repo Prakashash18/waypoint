@@ -1,0 +1,10 @@
+venv/
+web/node_modules/
+.git/
+.cache/
+__pycache__/
+*.pyc
+.env
+design/
+tests/api_smoke_results.json
+src/ui/static/captures/*.png
