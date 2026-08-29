@@ -37,6 +37,16 @@ reasoning = ReasoningEngine()
 checkpoint_manager = CheckpointManager(cli, audit, reasoning)
 current_options = []
 
+# The API key in use is scoped to synthesis only, so /v1/voices returns 401 and
+# the roster has to be declared here rather than fetched.
+DEFAULT_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'
+VOICE_CHOICES = [
+    {'id': 'EXAVITQu4vr4xnSDxMaL', 'name': 'Sarah', 'description': 'warm, calm'},
+    {'id': '21m00Tcm4TlvDq8ikWAM', 'name': 'Rachel', 'description': 'clear, neutral'},
+    {'id': 'ErXwobaYiN019PkySvjV', 'name': 'Antoni', 'description': 'friendly, male'},
+    {'id': 'TxGEqnHWrfWFTfGW9XjX', 'name': 'Josh', 'description': 'deep, male'},
+]
+
 
 @app.route('/api/disruption', methods=['POST'])
 def submit_disruption():
@@ -892,10 +902,156 @@ def text_to_speech():
         return jsonify({'error': str(e), 'silent': True}), 503
 
 
+@app.route('/api/voice/transcribe', methods=['POST'])
+def voice_transcribe():
+    """Transcribe recorded audio with ElevenLabs Scribe.
+
+    Takes a multipart upload under `audio` (whatever MediaRecorder produced)
+    and returns the text. Used for voice input so transcription quality does
+    not depend on which browser the traveller is using.
+    """
+    key = os.getenv('ELEVENLABS_API_KEY', '')
+    if not key:
+        return jsonify({'success': False,
+                        'error': 'ELEVENLABS_API_KEY is not set, so voice input is unavailable'}), 503
+
+    clip = request.files.get('audio')
+    if clip is None:
+        return jsonify({'success': False, 'error': 'no audio uploaded'}), 400
+
+    import time as _time
+    import requests as req
+    started = _time.time()
+    try:
+        resp = req.post(
+            'https://api.elevenlabs.io/v1/speech-to-text',
+            headers={'xi-api-key': key},
+            files={'file': (clip.filename or 'clip.webm', clip.stream,
+                            clip.mimetype or 'audio/webm')},
+            data={'model_id': 'scribe_v1'},
+            timeout=60,
+        )
+    except Exception as e:
+        app.logger.exception('transcription failed')
+        return jsonify({'success': False, 'error': f'transcription request failed: {e}'}), 503
+
+    duration_ms = int((_time.time() - started) * 1000)
+    if resp.status_code != 200:
+        return jsonify({'success': False,
+                        'error': f'ElevenLabs returned {resp.status_code}',
+                        'detail': resp.text[:300]}), 502
+
+    body = resp.json()
+    try:
+        tracker.record_elevenlabs(endpoint='speech-to-text',
+                                  characters=len(body.get('text', '')),
+                                  status='success')
+    except Exception:
+        pass
+
+    return jsonify({
+        'success': True,
+        'text': body.get('text', ''),
+        'language': body.get('language_code', ''),
+        'confidence': body.get('language_probability'),
+        'duration_ms': duration_ms,
+    })
+
+
+@app.route('/api/voice/speak', methods=['POST'])
+def voice_speak():
+    """Stream spoken audio for a reply.
+
+    Uses the streaming endpoint and the turbo model: a short sentence comes
+    back in roughly 300ms, which is quick enough to answer out loud.
+    """
+    key = os.getenv('ELEVENLABS_API_KEY', '')
+    if not key:
+        return jsonify({'error': 'voice output not configured', 'silent': True}), 503
+
+    data = request.json or {}
+    text = (data.get('text') or '').strip()
+    if not text:
+        return jsonify({'error': 'no text provided'}), 400
+
+    # Long answers are expensive and nobody listens to a four-minute reply.
+    text = text[:1200]
+    voice_id = data.get('voice_id', DEFAULT_VOICE_ID)
+
+    import requests as req
+    try:
+        upstream = req.post(
+            f'https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream',
+            headers={'xi-api-key': key, 'Content-Type': 'application/json'},
+            json={'text': text,
+                  'model_id': data.get('model_id', 'eleven_turbo_v2_5'),
+                  'output_format': 'mp3_44100_128',
+                  'voice_settings': {'stability': 0.45, 'similarity_boost': 0.75,
+                                     'speed': float(data.get('speed', 1.0))}},
+            timeout=45, stream=True,
+        )
+    except Exception as e:
+        app.logger.exception('tts failed')
+        return jsonify({'error': str(e), 'silent': True}), 503
+
+    if upstream.status_code != 200:
+        return jsonify({'error': f'ElevenLabs returned {upstream.status_code}',
+                        'detail': upstream.text[:300], 'silent': True}), 502
+
+    try:
+        tracker.record_elevenlabs(endpoint='text-to-speech-stream',
+                                  characters=len(text), status='success')
+    except Exception:
+        pass
+
+    return Response(upstream.iter_content(chunk_size=4096), mimetype='audio/mpeg',
+                    headers={'Cache-Control': 'no-cache',
+                             'Content-Disposition': 'inline'})
+
+
+@app.route('/api/voice/status')
+def voice_status():
+    """Whether voice in and voice out are usable right now."""
+    configured = bool(os.getenv('ELEVENLABS_API_KEY'))
+    return jsonify({
+        'input': {'available': configured, 'provider': 'ElevenLabs Scribe',
+                  'note': '' if configured else 'set ELEVENLABS_API_KEY to enable'},
+        'output': {'available': configured, 'provider': 'ElevenLabs Turbo v2.5',
+                   'note': '' if configured else 'set ELEVENLABS_API_KEY to enable'},
+        'voices': VOICE_CHOICES,
+    })
+
+
 @app.route('/agent')
 def agent_console():
     """Console showing what the agent called, what it found, and from where."""
     return render_template('agent.html')
+
+
+# ── Vite React app (voice-enabled agent UI) ─────────────────────────
+
+_AGENT_APP_DIR = os.path.join(os.path.dirname(__file__), 'agent-app')
+
+
+@app.route('/app')
+@app.route('/app/')
+def agent_app_index():
+    """The React UI. Built from web/ with `npm run build`."""
+    from flask import send_from_directory
+    index = os.path.join(_AGENT_APP_DIR, 'index.html')
+    if not os.path.exists(index):
+        return ('<h1>UI not built</h1>'
+                '<p>Run <code>cd web &amp;&amp; npm install &amp;&amp; npm run build</code>.</p>'), 501
+    return send_from_directory(_AGENT_APP_DIR, 'index.html')
+
+
+@app.route('/app/<path:path>')
+def agent_app_asset(path):
+    from flask import send_from_directory
+    full = os.path.join(_AGENT_APP_DIR, path)
+    if os.path.exists(full) and os.path.isfile(full):
+        return send_from_directory(_AGENT_APP_DIR, path)
+    return send_from_directory(_AGENT_APP_DIR, 'index.html')
 
 
 # ── SPA Catch-All (must be LAST route) ──────────────────────────────
