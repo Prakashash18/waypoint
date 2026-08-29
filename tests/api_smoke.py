@@ -57,7 +57,8 @@ def test_atlas():
     print("\n── Atlas CLI ─────────────────────────────────────────────")
     for label, args in [
         ('atlas doctor', ['doctor']),
-        ('atlas environment show', ['environment', 'show']),
+        # NB: `environment` only has a `use` subcommand in CLI 0.3.12 — there
+        # is no way to query the current environment, so we do not check it.
         ('atlas auth status', ['auth', 'status']),
     ]:
         (res, ms, err) = timed(lambda a=args: atlas(*a))
@@ -172,28 +173,132 @@ def test_aviationstack():
 
 # ── RapidAPI hotels ──────────────────────────────────────────────────
 def test_rapidapi():
-    print("\n── RapidAPI (hotels) ─────────────────────────────────────")
+    print("\n── RapidAPI / Booking.com ────────────────────────────────")
     key = os.getenv('RAPIDAPI_KEY', '')
     if not key:
         record('rapidapi key present', False, 'unset'); return
     record('rapidapi key present', True, f"{key[:8]}…{key[-4:]}")
 
-    # What the code currently calls (hotels_tool.py)
-    probes = [
-        ('booking-com.p.rapidapi.com', '/v1/hotels/searchDestination', {'name': 'Bali'}, 'CURRENT CODE PATH'),
-        ('booking-com.p.rapidapi.com', '/v1/hotels/locations', {'name': 'Bali', 'locale': 'en-gb'}, 'v1 correct path'),
-        ('booking-com15.p.rapidapi.com', '/api/v1/hotels/searchDestination', {'query': 'Bali'}, 'v15 API'),
-        ('booking-com18.p.rapidapi.com', '/stays/auto-complete', {'query': 'Bali'}, 'v18 API'),
+    host = 'booking-com15.p.rapidapi.com'
+    H = {'x-rapidapi-key': key, 'x-rapidapi-host': host}
+
+    (r, ms, err) = timed(lambda: requests.get(
+        f'https://{host}/api/v1/hotels/searchDestination',
+        params={'query': 'Bali'}, headers=H, timeout=25))
+    if err:
+        record('booking15 searchDestination', False, type(err).__name__, ms, str(err)[:160]); return
+    ok = r.status_code == 200
+    hint = '' if ok else 'subscribe this key to booking-com15 on rapidapi.com (free BASIC plan)'
+    dest = (r.json().get('data') or [{}]) if ok else [{}]
+    record('booking15 searchDestination', ok, f"HTTP {r.status_code}", ms,
+           f"{len(dest)} destinations | {dest[0].get('label','')}" if ok else f"{hint} | {r.text[:120]}")
+    if not ok:
+        return
+
+    city = next((d for d in dest if d.get('search_type') == 'city'), dest[0])
+    (r, ms, err) = timed(lambda: requests.get(
+        f'https://{host}/api/v1/hotels/searchHotels', headers=H, timeout=30,
+        params={'dest_id': city.get('dest_id'), 'search_type': city.get('search_type'),
+                'arrival_date': DEPART, 'departure_date': RETURN, 'adults': '2',
+                'room_qty': '1', 'page_number': '1', 'currency_code': 'USD',
+                'languagecode': 'en-us', 'units': 'metric'}))
+    if err:
+        record('booking15 searchHotels', False, type(err).__name__, ms, str(err)[:160]); return
+    hotels = ((r.json().get('data') or {}).get('hotels') or []) if r.status_code == 200 else []
+    priced = [h for h in hotels
+              if ((h.get('property') or {}).get('priceBreakdown') or {}).get('grossPrice')]
+    withpix = [h for h in hotels if (h.get('property') or {}).get('photoUrls')]
+    record('booking15 searchHotels', bool(priced), f"HTTP {r.status_code} hotels={len(hotels)}", ms,
+           f"{len(priced)} priced, {len(withpix)} with real photos")
+
+
+# ── The authentic-data stack this project now runs on ────────────────
+def test_stack():
+    print("\n── Waypoint tool stack (live) ────────────────────────────")
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    from src.tools import tool_registry
+    from src.tools.places_tool import PlacesTool
+    from src.tools.imagery_tool import ImageryTool
+
+    record('registry loads', True,
+           f"{len(tool_registry.list_tools())} tools, "
+           f"{len(tool_registry.all_capabilities())} capabilities")
+
+    places = PlacesTool()
+    (res, ms, err) = timed(lambda: places.find_hotels(
+        {'destination': 'Ubud, Bali', 'radius_m': 5000, 'limit': 8}))
+    if err:
+        record('places.find_hotels (OSM)', False, type(err).__name__, ms, str(err)[:160])
+    else:
+        hotels = (res.data or {}).get('hotels', [])
+        named = [h['name'] for h in hotels[:3]]
+        record('places.find_hotels (OSM)', res.is_success(),
+               f"{len(hotels)} real hotels", ms, ', '.join(named))
+        # The contract that matters: no invented prices.
+        no_prices = all(h.get('price_per_night') is None for h in hotels)
+        record('  └ OSM hotels carry no fake price', no_prices,
+               'all prices None' if no_prices else 'A PRICE WAS INVENTED')
+
+    (res, ms, err) = timed(lambda: places.find_hotels({'destination': 'Zzqqxnowhere'}))
+    good = (not err) and not res.is_success() and not (res.data or {}).get('hotels')
+    record('bogus place returns nothing', good,
+           res.status.value if not err else 'exception', ms,
+           res.message[:120] if not err else str(err)[:120])
+
+    imagery = ImageryTool()
+    (res, ms, err) = timed(lambda: imagery.capture_hotel_view(
+        {'name': 'Maya Ubud', 'website': 'http://www.mayaubud.com',
+         'lat': -8.5131489, 'lon': 115.2779248}))
+    if err:
+        record('imagery website screenshot', False, type(err).__name__, ms, str(err)[:160])
+    else:
+        record('imagery website screenshot', res.is_success(),
+               f"mode={res.data.get('capture_mode')} {res.data.get('bytes', 0)}b", ms,
+               res.data.get('image_url', ''))
+
+    (res, ms, err) = timed(lambda: imagery.capture_hotel_view({'name': 'Nowhere Inn'}))
+    refused = (not err) and not res.data.get('image_url')
+    record('imagery refuses to fake', refused,
+           'no image returned' if refused else 'RETURNED AN IMAGE IT SHOULD NOT HAVE',
+           ms, res.message[:110] if not err else '')
+
+
+# ── The running Flask app ────────────────────────────────────────────
+def test_endpoints():
+    print("\n── Flask endpoints ───────────────────────────────────────")
+    base = os.getenv('WAYPOINT_URL', 'http://localhost:2000')
+    checks = [
+        ('GET /api/state', 'get', '/api/state', None),
+        ('GET /api/tools', 'get', '/api/tools', None),
+        ('GET /api/sources', 'get', '/api/sources', None),
+        ('GET /api/flight-delays', 'get', '/api/flight-delays?airport=SIN', None),
+        ('GET /api/tracker/summary', 'get', '/api/tracker/summary', None),
+        ('POST /api/chat', 'post', '/api/chat', {'message': 'hello'}),
+        ('POST /api/agent/plan', 'post', '/api/agent/plan',
+         {'request': 'One night in Singapore on ' + DEPART + ', 1 adult, cheapest option'}),
     ]
-    for host, path, params, note in probes:
-        (r, ms, err) = timed(lambda h=host, p=path, q=params: requests.get(
-            f'https://{h}{p}', params=q,
-            headers={'X-RapidAPI-Key': key, 'X-RapidAPI-Host': h}, timeout=20))
-        label = f'{host.split(".")[0]}{path}'
+    for label, verb, path, body in checks:
+        fn = (lambda: requests.get(base + path, timeout=180)) if verb == 'get' else \
+             (lambda: requests.post(base + path, json=body, timeout=180))
+        (r, ms, err) = timed(fn)
         if err:
-            record(label, False, type(err).__name__, ms, f"{note} | {str(err)[:140]}"); continue
+            record(label, False, type(err).__name__, ms,
+                   'is the server running?  python run.py'); continue
         ok = r.status_code == 200
-        record(label, ok, f"HTTP {r.status_code}", ms, f"{note} | {r.text[:220]}")
+        detail = ''
+        try:
+            body_json = r.json()
+            if isinstance(body_json, dict):
+                if body_json.get('success') is False:
+                    ok = False
+                    detail = str(body_json.get('error'))[:140]
+                elif 'tool_calls' in body_json:
+                    detail = (f"{body_json['tool_calls']} tool calls, "
+                              f"{len(body_json.get('packages', []))} packages, "
+                              f"stopped={body_json.get('stopped')}")
+        except ValueError:
+            pass
+        record(label, ok, f'HTTP {r.status_code}', ms, detail)
 
 
 # ── ElevenLabs ───────────────────────────────────────────────────────
@@ -204,12 +309,17 @@ def test_elevenlabs():
         record('elevenlabs key present', False, 'unset'); return
     record('elevenlabs key present', True, f"{key[:8]}…{key[-4:]}")
 
+    # A TTS-scoped key cannot read /v1/user. That is fine — only TTS is used —
+    # so a 401 here is reported as a note, not a failure.
     (r, ms, err) = timed(lambda: requests.get('https://api.elevenlabs.io/v1/user',
                                               headers={'xi-api-key': key}, timeout=20))
     if err:
-        record('elevenlabs /v1/user', False, type(err).__name__, ms, str(err)[:160])
+        record('elevenlabs /v1/user', None, type(err).__name__, ms, str(err)[:160])
     else:
-        record('elevenlabs /v1/user', r.status_code == 200, f"HTTP {r.status_code}", ms, r.text[:200])
+        record('elevenlabs /v1/user', True if r.status_code == 200 else None,
+               f"HTTP {r.status_code}", ms,
+               'key is TTS-scoped; user_read not granted (expected)'
+               if r.status_code == 401 else r.text[:160])
 
     (r, ms, err) = timed(lambda: requests.post(
         'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
@@ -270,7 +380,9 @@ def test_alternatives():
 
 
 SUITES = {'atlas': test_atlas, 'openai': test_openai, 'aviationstack': test_aviationstack,
-          'rapidapi': test_rapidapi, 'elevenlabs': test_elevenlabs, 'alternatives': test_alternatives}
+          'rapidapi': test_rapidapi, 'elevenlabs': test_elevenlabs,
+          'alternatives': test_alternatives, 'stack': test_stack,
+          'endpoints': test_endpoints}
 
 if __name__ == '__main__':
     want = sys.argv[1:] or list(SUITES)
