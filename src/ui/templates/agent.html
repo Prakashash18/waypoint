@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waypoint — Agent Console</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --ink:#e7eaf0; --dim:#9aa3b2; --faint:#6b7484;
+    --accent:#6ea8fe; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{padding:22px 28px;border-bottom:1px solid var(--line);
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:19px;margin:0;letter-spacing:-.2px}
+  .tag{font-size:12px;color:var(--dim);border:1px solid var(--line);
+    padding:3px 9px;border-radius:99px}
+  main{max-width:1180px;margin:0 auto;padding:26px}
+  .ask{display:flex;gap:10px;margin-bottom:14px}
+  textarea{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    border-radius:var(--radius);padding:14px;font:inherit;resize:vertical;min-height:76px}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  button{background:var(--accent);color:#0b1020;border:0;border-radius:var(--radius);
+    padding:0 22px;font:600 15px/1 inherit;cursor:pointer;min-width:110px}
+  button:disabled{opacity:.5;cursor:default}
+  .examples{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px}
+  .ex{font-size:13px;color:var(--dim);background:var(--panel);border:1px solid var(--line);
+    padding:6px 11px;border-radius:99px;cursor:pointer}
+  .ex:hover{color:var(--ink);border-color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;margin-bottom:18px}
+  h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);
+    margin:0 0 12px}
+  .answer{white-space:pre-wrap}
+  .answer img{max-width:100%;border-radius:8px;margin:10px 0}
+  .hotels{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .hotel{background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .hotel img{width:100%;height:158px;object-fit:cover;display:block;background:#0b0d12}
+  .noimg{height:158px;display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:14px;color:var(--faint);font-size:12px;background:#0b0d12}
+  .hotel .body{padding:12px}
+  .hname{font-weight:600;margin-bottom:5px;font-size:14px}
+  .meta{font-size:12.5px;color:var(--dim);margin-bottom:3px}
+  .price{font-weight:600;color:var(--ok);font-size:15px}
+  .noprice{color:var(--warn);font-size:12.5px;font-weight:500}
+  .badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}
+  .badge{font-size:10.5px;padding:2.5px 7px;border-radius:99px;
+    border:1px solid var(--line);color:var(--dim);background:#12151c}
+  .badge.live{color:var(--ok);border-color:#1f4d33}
+  .badge.cached{color:var(--accent);border-color:#25405f}
+  .badge.shot{color:#c4b5fd;border-color:#3f3663}
+  .step{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .step:last-child{border-bottom:0}
+  .step .n{color:var(--faint);min-width:20px}
+  .step .what{flex:1}
+  .step .ms{color:var(--faint);font-variant-numeric:tabular-nums;font-size:12px}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin-right:7px}
+  .dot.success{background:var(--ok)} .dot.error{background:var(--bad)}
+  .dot.no_results{background:var(--warn)} .dot.final{background:var(--accent)}
+  .src{display:flex;justify-content:space-between;gap:10px;padding:7px 0;font-size:13px;
+    border-bottom:1px solid var(--line)}
+  .src:last-child{border-bottom:0}
+  .miss{color:var(--warn);font-size:13px;margin-top:9px;line-height:1.5}
+  .policy{font-size:12px;color:var(--faint);margin-top:12px;line-height:1.5}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--line);
+    border-top-color:var(--accent);border-radius:99px;animation:s .7s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .empty{color:var(--faint);font-size:13px}
+  code{background:#0b0d12;padding:1px 5px;border-radius:4px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Waypoint</h1>
+  <span class="tag">agent console</span>
+  <span class="tag" id="policy">no simulated data</span>
+</header>
+
+<main>
+  <div class="ask">
+    <textarea id="q" placeholder="Ask for a trip in your own words — dates, budget, what matters to you."></textarea>
+    <button id="go">Plan</button>
+  </div>
+  <div class="examples" id="examples"></div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Recommendation</h2>
+        <div class="answer" id="answer"><span class="empty">Ask something to begin.</span></div>
+      </div>
+      <div class="card" id="hotelCard" style="display:none">
+        <h2>Hotels found <span id="hcount" style="color:var(--faint)"></span></h2>
+        <div class="hotels" id="hotels"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>What the agent did</h2>
+        <div id="trace"><span class="empty">No calls yet.</span></div>
+      </div>
+      <div class="card">
+        <h2>Sources this run</h2>
+        <div id="sources"><span class="empty">—</span></div>
+        <div class="miss" id="missing"></div>
+      </div>
+      <div class="card">
+        <h2>Providers configured</h2>
+        <div id="providers"><span class="empty">loading…</span></div>
+        <div class="policy" id="providerPolicy"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const EXAMPLES = [
+  "4 nights in Ubud, Bali from Kuala Lumpur, 28 Sep to 2 Oct 2026, two adults, under $900 total. Somewhere quiet with great reviews.",
+  "Cheapest decent hotel in Singapore for 2 nights from 28 Sep 2026, one adult.",
+  "Find real hotels near Ubud from OpenStreetMap and show me their actual websites.",
+  "What's flying out of Changi that's delayed right now?"
+];
+
+EXAMPLES.forEach(text => {
+  const el = document.createElement('span');
+  el.className = 'ex';
+  el.textContent = text.length > 62 ? text.slice(0, 62) + '…' : text;
+  el.title = text;
+  el.onclick = () => { $('q').value = text; };
+  $('examples').appendChild(el);
+});
+
+function esc(s){ return (s ?? '').toString()
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// The answer is model-written markdown-ish text. Render only images, bold and
+// line breaks — everything else stays escaped.
+function renderAnswer(text){
+  return esc(text)
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, src) =>
+      /^(https?:|\/static\/)/.test(src) ? `<img src="${src}" alt="${alt}">` : '')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/^### (.+)$/gm, '<strong>$1</strong>');
+}
+
+function badge(label, cls){ return `<span class="badge ${cls||''}">${esc(label)}</span>`; }
+
+function hotelCard(h){
+  const prov = h.provenance || {};
+  const imgSrc = h.image_url;
+  const img = imgSrc
+    ? `<img src="${esc(imgSrc)}" alt="${esc(h.name)}" loading="lazy"
+         onerror="this.outerHTML='<div class=&quot;noimg&quot;>image failed to load</div>'">`
+    : `<div class="noimg">${esc(h.image_note || 'No authentic image available — none was invented.')}</div>`;
+
+  const price = (h.total_price != null)
+    ? `<div class="price">${h.currency || 'USD'} ${Number(h.total_price).toFixed(0)}
+       <span class="meta" style="font-weight:400">total${h.nights ? ' · ' + h.nights + ' nights' : ''}</span></div>`
+    : `<div class="noprice">Price not available from any configured source</div>`;
+
+  const stars = h.stars ? `${h.stars}★ · ` : '';
+  const score = h.review_score
+    ? `${h.review_score}/10${h.review_count ? ` (${h.review_count} reviews)` : ''}`
+    : (h.address || h.area || '');
+
+  const imgBadge = {
+    provider_photo: badge('real photo', 'live'),
+    website:        badge('live screenshot', 'shot'),
+    map:            badge('map of location', 'shot'),
+    photo:          badge('geotagged photo', 'shot'),
+  }[h.image_source] || '';
+
+  return `<div class="hotel">${img}<div class="body">
+    <div class="hname">${esc(h.name)}</div>
+    <div class="meta">${esc(stars)}${esc(score)}</div>
+    ${h.area ? `<div class="meta">${esc(h.area)}</div>` : ''}
+    ${price}
+    <div class="badges">
+      ${badge(prov.label || h.source || 'source', prov.status === 'live' ? 'live'
+              : prov.status === 'cached' ? 'cached' : '')}
+      ${imgBadge}
+      ${h.website ? badge('official site') : ''}
+    </div></div></div>`;
+}
+
+function renderTrace(steps){
+  if(!steps || !steps.length){ $('trace').innerHTML = '<span class="empty">No calls.</span>'; return; }
+  $('trace').innerHTML = steps.map(s => {
+    const auto = (s.summary || '').startsWith('[auto]');
+    const what = s.kind === 'tool_call'
+      ? `<code>${esc(s.tool)}.${esc(s.capability)}</code>${auto ? ' <span class="badge">guaranteed</span>' : ''}
+         <div class="meta">${esc((s.summary || '').replace('[auto] ', ''))}</div>`
+      : `<em>wrote the recommendation</em>`;
+    return `<div class="step"><span class="n">${s.step}</span>
+      <span class="what"><span class="dot ${esc(s.status)}"></span>${what}</span>
+      <span class="ms">${s.duration_ms}ms</span></div>`;
+  }).join('');
+}
+
+function renderSources(sources){
+  const list = (sources && sources.sources) || [];
+  $('sources').innerHTML = list.length
+    ? list.map(s => `<div class="src"><span>${esc(s.label)}</span>
+        <span class="badge ${s.status === 'live' ? 'live' : s.status === 'cached' ? 'cached' : ''}">${esc(s.status)}</span>
+      </div>`).join('')
+    : '<span class="empty">—</span>';
+  const missing = (sources && sources.missing) || [];
+  $('missing').innerHTML = missing.length
+    ? '⚠ ' + missing.map(esc).join('<br>⚠ ')
+    : '';
+}
+
+async function loadProviders(){
+  try{
+    const r = await fetch('/api/sources');
+    const d = await r.json();
+    $('providers').innerHTML = d.sources.map(s =>
+      `<div class="src"><span>${esc(s.label)}<div class="meta">${esc(s.provides)}</div></span>
+       <span class="badge ${s.configured ? 'live' : ''}">${s.configured ? 'ready' : 'not set'}</span></div>`
+    ).join('');
+    $('providerPolicy').textContent = d.policy;
+  }catch(e){ $('providers').innerHTML = '<span class="empty">could not load</span>'; }
+}
+
+async function plan(){
+  const request = $('q').value.trim();
+  if(!request) return;
+  $('go').disabled = true;
+  $('answer').innerHTML = '<span class="spin"></span> planning — calling real providers…';
+  $('trace').innerHTML = '<span class="empty">working…</span>';
+  $('hotelCard').style.display = 'none';
+
+  try{
+    const r = await fetch('/api/agent/plan', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ request })
+    });
+    const d = await r.json();
+    if(!d.success){ $('answer').innerHTML = `<span style="color:var(--bad)">${esc(d.error)}</span>`; return; }
+
+    $('answer').innerHTML = renderAnswer(d.answer) ||
+      '<span class="empty">The agent returned no text.</span>';
+    renderTrace(d.trace);
+    renderSources(d.sources);
+
+    const hotels = (d.artifacts && d.artifacts.hotels) || [];
+    if(hotels.length){
+      $('hotels').innerHTML = hotels.slice(0, 12).map(hotelCard).join('');
+      $('hcount').textContent = `· ${hotels.length}`;
+      $('hotelCard').style.display = '';
+    }
+  }catch(e){
+    $('answer').innerHTML = `<span style="color:var(--bad)">Request failed: ${esc(e.message)}</span>`;
+  }finally{
+    $('go').disabled = false;
+  }
+}
+
+$('go').onclick = plan;
+$('q').addEventListener('keydown', e => {
+  if((e.metaKey || e.ctrlKey) && e.key === 'Enter') plan();
+});
+loadProviders();
+</script>
+</body>
+</html>

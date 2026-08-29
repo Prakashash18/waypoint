@@ -892,6 +892,12 @@ def text_to_speech():
         return jsonify({'error': str(e), 'silent': True}), 503
 
 
+@app.route('/agent')
+def agent_console():
+    """Console showing what the agent called, what it found, and from where."""
+    return render_template('agent.html')
+
+
 # ── SPA Catch-All (must be LAST route) ──────────────────────────────
 
 import os as _os
