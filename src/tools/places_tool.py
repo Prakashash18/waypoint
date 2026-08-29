@@ -65,6 +65,26 @@ IATA_TO_PLACE = {
 LUXURY_HINTS = ('resort', 'spa', 'villa', 'suites')
 
 
+def _normalize_name(name: str) -> str:
+    """Strip the words that differ between listings of the same hotel."""
+    import re
+    noise = ('hotel', 'resort', 'villa', 'villas', 'spa', 'the', 'by', 'and',
+             'suites', 'house', 'bali', 'ubud', 'boutique', 'a', 'at')
+    words = re.sub(r'[^a-z0-9 ]', ' ', name.lower()).split()
+    kept = [w for w in words if w not in noise]
+    return ' '.join(kept or words)
+
+
+def _name_similarity(a: str, b: str) -> float:
+    """Token overlap, biased toward the shorter name being contained."""
+    from difflib import SequenceMatcher
+    if not a or not b:
+        return 0.0
+    ta, tb = set(a.split()), set(b.split())
+    overlap = len(ta & tb) / max(1, min(len(ta), len(tb)))
+    return max(overlap, SequenceMatcher(None, a, b).ratio())
+
+
 class _TTLCache:
     """Small thread-safe cache — OSM asks that we not re-query needlessly."""
 
@@ -121,6 +141,21 @@ class PlacesTool(ToolBase):
                 returns='list[Hotel]',
             ),
             ToolCapability(
+                name='match_hotel',
+                description=(
+                    'Look up a hotel you already know by name and coordinates in '
+                    'OpenStreetMap to recover its OFFICIAL WEBSITE, phone and address. '
+                    'Use this on a hotel from hotel_rates before capturing a website '
+                    'screenshot, since rate results do not carry the official site.'
+                ),
+                parameters={
+                    'name': 'Hotel name as returned by another tool',
+                    'lat': 'Latitude of the hotel',
+                    'lon': 'Longitude of the hotel',
+                },
+                returns='HotelMatch',
+            ),
+            ToolCapability(
                 name='geocode_place',
                 description='Resolve a place name to real coordinates and a display name',
                 parameters={'query': 'Place name to look up'},
@@ -137,6 +172,8 @@ class PlacesTool(ToolBase):
     def execute(self, capability: str, params: Dict[str, Any]) -> ToolResult:
         if capability == 'find_hotels':
             return self.find_hotels(params)
+        if capability == 'match_hotel':
+            return self.match_hotel(params)
         if capability == 'geocode_place':
             return self.geocode_place(params)
         if capability == 'describe_area':
@@ -377,6 +414,62 @@ class PlacesTool(ToolBase):
             'image_url': None,
         }
         return stamp(record, prov)
+
+    # ── matching a known hotel back to OSM ───────────────────────
+
+    def match_hotel(self, params: Dict[str, Any]) -> ToolResult:
+        """Find the OSM record for a hotel we already know, to get its website.
+
+        Booking.com results carry no official site. OSM often does, which is
+        what makes a real screenshot of the hotel's own page possible.
+        """
+        name = (params.get('name') or '').strip()
+        lat, lon = params.get('lat'), params.get('lon')
+        if not name or lat is None or lon is None:
+            return ToolResult(status=ToolStatus.ERROR,
+                              message='name, lat and lon are all required',
+                              error='Missing parameters')
+
+        lat, lon = float(lat), float(lon)
+        # Hotels sit within a few hundred metres of their listed coordinates.
+        elements, err = self._overpass_hotels(lat, lon, 1200)
+        if elements is None:
+            prov = Provenance('osm', SourceStatus.FAILED, detail=err or 'unknown error')
+            return ToolResult(status=ToolStatus.ERROR, data={'provenance': prov.to_dict()},
+                              message=f'Could not reach OpenStreetMap to match {name!r}: {err}',
+                              error=err)
+
+        prov = Provenance('osm', SourceStatus.LIVE, license='ODbL',
+                          attribution=OSM_ATTRIBUTION,
+                          detail=f'matched {name!r} within 1200m')
+
+        candidates = [c for c in (self._normalize(e, lat, lon, prov) for e in elements) if c]
+        target = _normalize_name(name)
+        best, best_score = None, 0.0
+        for cand in candidates:
+            score = _name_similarity(target, _normalize_name(cand['name']))
+            if score > best_score:
+                best, best_score = cand, score
+
+        # Below this the 'match' is really a different hotel next door.
+        if not best or best_score < 0.55:
+            prov_none = Provenance('osm', SourceStatus.UNAVAILABLE,
+                                   detail=f'no OSM hotel within 1200m resembling {name!r}')
+            return ToolResult(
+                status=ToolStatus.NO_RESULTS,
+                data={'query': name, 'matched': None, 'provenance': prov_none.to_dict()},
+                message=(f'OpenStreetMap has no confident match for {name!r}. '
+                         f'No official website available — capture a map view instead.'),
+            )
+
+        best['match_confidence'] = round(best_score, 2)
+        best['matched_query'] = name
+        return ToolResult(
+            status=ToolStatus.SUCCESS, data=best,
+            message=(f"Matched {name!r} to OSM '{best['name']}' "
+                     f"({best_score:.0%} confident)" +
+                     (f" — website {best['website']}" if best['website'] else ' — no website on file')),
+        )
 
     # ── area description ─────────────────────────────────────────
 

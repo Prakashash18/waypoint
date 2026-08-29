@@ -578,53 +578,204 @@ def list_tools():
 
 @app.route('/api/plan-trip', methods=['POST'])
 def plan_trip():
-    """Plan a trip using the TripComposer — searches flights + hotels in parallel."""
+    """Plan a trip. Structured params in, agent-planned itinerary out.
+
+    Kept for the existing UI. The fixed flight+hotel pipeline behind it was
+    replaced by TripAgent, which chooses its own tools, so results now vary
+    with what was actually asked for.
+    """
     try:
-        from src.tools.composer import TripComposer, TripRequest
-        from src.tools import tool_registry
-        
-        data = request.json
-        
-        trip_request = TripRequest(
-            origin=data.get('origin', ''),
-            destination=data.get('destination', ''),
-            depart_date=data.get('depart_date', ''),
-            return_date=data.get('return_date', ''),
-            adults=data.get('adults', 2),
-            children=data.get('children', 0),
-            budget=float(data.get('budget', 0)),
-            currency=data.get('currency', 'USD'),
-            preferences=data.get('preferences', {}),
-        )
-        
-        composer = TripComposer(tool_registry)
-        result = composer.plan(trip_request)
-        
-        # Add helpful message when no packages were found
-        packages = result.get('packages', [])
-        if not packages:
-            summary = result.get('summary', '')
-            origin = trip_request.origin
-            destination = trip_request.destination
-            depart = trip_request.depart_date
-            result['message'] = (
-                f"No flights or hotels found for {origin} to {destination} "
-                f"on {depart}. Try different dates, a different route, or check "
-                f"that the city names are spelled correctly. "
-                f"{summary}"
-            ).strip()
-        
+        data = request.json or {}
+        brief = _brief_from_params(data)
+        result = _agent().plan(brief, context=data)
         return jsonify({
             'success': True,
+            'packages': _packages_from(result),
+            'response': result['answer'],
             **result,
         })
-    
     except Exception as e:
+        app.logger.exception('plan-trip failed')
         return jsonify({
             'success': False,
-            'response': f"I ran into a problem planning your trip: {str(e)}",
-            'error': str(e)
+            'response': f"I ran into a problem planning your trip: {e}",
+            'error': str(e),
         }), 400
+
+
+@app.route('/api/agent/plan', methods=['POST'])
+def agent_plan():
+    """Plan from a free-form request: {"request": "...", "context": {...}}."""
+    try:
+        data = request.json or {}
+        brief = (data.get('request') or '').strip()
+        if not brief:
+            return jsonify({'success': False,
+                            'error': 'request is required'}), 400
+        result = _agent().plan(brief, context=data.get('context'))
+        return jsonify({'success': True, 'packages': _packages_from(result), **result})
+    except Exception as e:
+        app.logger.exception('agent plan failed')
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/agent/stream', methods=['POST'])
+def agent_stream():
+    """Same as /api/agent/plan but streams each tool call as it happens."""
+    data = request.json or {}
+    brief = (data.get('request') or _brief_from_params(data)).strip()
+    context = data.get('context') or data
+
+    def generate():
+        queue: list = []
+        try:
+            result = _agent().plan(brief, context=context,
+                                   on_step=lambda s: queue.append(s.to_dict()))
+            for step in queue:
+                yield f"event: step\ndata: {json.dumps(step)}\n\n"
+            payload = {'packages': _packages_from(result), **result}
+            yield f"event: done\ndata: {json.dumps(payload, default=str)}\n\n"
+        except Exception as e:
+            app.logger.exception('agent stream failed')
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache',
+                             'X-Accel-Buffering': 'no'})
+
+
+@app.route('/api/sources', methods=['GET'])
+def list_sources():
+    """Which data providers are configured, so the UI can be honest up front."""
+    from src.tools import tool_registry
+    rates = tool_registry.get('hotel_rates')
+    return jsonify({
+        'sources': [
+            {'id': 'atlas_cli', 'label': 'Atlas CLI',
+             'provides': 'real bookable flights',
+             'configured': True},
+            {'id': 'booking_rapidapi', 'label': 'Booking.com (RapidAPI)',
+             'provides': 'hotel rates, review scores, photographs',
+             'configured': bool(getattr(rates, 'configured', False))},
+            {'id': 'osm', 'label': 'OpenStreetMap',
+             'provides': 'real hotels, coordinates, official websites',
+             'configured': True},
+            {'id': 'wikimedia', 'label': 'Wikimedia / Wikipedia',
+             'provides': 'area descriptions and geotagged photographs',
+             'configured': True},
+            {'id': 'screenshot', 'label': 'Live screenshots',
+             'provides': 'screenshots of hotel websites and map views',
+             'configured': _playwright_available()},
+            {'id': 'aviationstack', 'label': 'AviationStack',
+             'provides': 'live flight delays',
+             'configured': bool(os.getenv('AVIATIONSTACK_API_KEY'))},
+            {'id': 'openai', 'label': 'OpenAI',
+             'provides': 'the planning agent itself',
+             'configured': bool(os.getenv('OPENAI_API_KEY'))},
+        ],
+        'policy': 'No source is simulated. An unconfigured source yields no data, never invented data.',
+    })
+
+
+# ── agent helpers ─────────────────────────────────────────────────
+
+_agent_singleton = None
+
+
+def _agent():
+    global _agent_singleton
+    if _agent_singleton is None:
+        from src.agent.trip_agent import TripAgent
+        _agent_singleton = TripAgent()
+    return _agent_singleton
+
+
+def _playwright_available() -> bool:
+    try:
+        import playwright  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _brief_from_params(data: dict) -> str:
+    """Turn the structured search form into the brief the agent reads."""
+    if data.get('request'):
+        return data['request']
+
+    bits = []
+    origin, dest = data.get('origin', ''), data.get('destination', '')
+    if origin and dest:
+        bits.append(f'Plan a trip from {origin} to {dest}')
+    elif dest:
+        bits.append(f'Plan a trip to {dest}')
+    else:
+        bits.append('Plan a trip')
+
+    depart, ret = data.get('depart_date', ''), data.get('return_date', '')
+    if depart and ret:
+        bits.append(f'departing {depart} and returning {ret}')
+    elif depart:
+        bits.append(f'departing {depart}')
+
+    adults = int(data.get('adults', 2) or 2)
+    children = int(data.get('children', 0) or 0)
+    party = f'{adults} adult' + ('s' if adults != 1 else '')
+    if children:
+        party += f' and {children} child' + ('ren' if children != 1 else '')
+    bits.append(f'for {party}')
+
+    budget = float(data.get('budget', 0) or 0)
+    if budget:
+        bits.append(f"with a total budget of {budget:.0f} {data.get('currency', 'USD')}")
+
+    prefs = data.get('preferences') or {}
+    wants = [k.replace('_', ' ') for k, v in prefs.items() if v is True]
+    if prefs.get('stars_min'):
+        wants.append(f"at least {prefs['stars_min']} stars")
+    if prefs.get('hotel_area'):
+        wants.append(f"staying in {prefs['hotel_area']}")
+    if wants:
+        bits.append('Preferences: ' + ', '.join(wants))
+
+    bits.append('Show a real image for each hotel you recommend.')
+    return '. '.join(bits) + '.'
+
+
+def _packages_from(result: dict) -> list:
+    """Shape the agent's picks for the existing card UI.
+
+    Only hotels the agent actually surfaced appear here, each carrying its
+    provenance so the card can show where the data came from.
+    """
+    hotels = (result.get('artifacts') or {}).get('hotels') or []
+    flights = (result.get('artifacts') or {}).get('flights') or []
+    cheapest_flight = min(flights, key=lambda f: f.get('price') or 1e9) if flights else None
+
+    packages = []
+    for hotel in hotels[:6]:
+        hotel_price = hotel.get('total_price')
+        flight_price = (cheapest_flight or {}).get('price') if cheapest_flight else None
+        total = None
+        if hotel_price is not None and flight_price is not None:
+            total = round(hotel_price + flight_price, 2)
+        elif hotel_price is not None:
+            total = hotel_price
+
+        packages.append({
+            'label': hotel.get('name', ''),
+            'hotel': hotel,
+            'flights': [cheapest_flight] if cheapest_flight else [],
+            'hotel_price': hotel_price,
+            'flight_price': flight_price,
+            'total_price': total,
+            'currency': hotel.get('currency') or 'USD',
+            'price_available': hotel_price is not None,
+            'image_url': hotel.get('image_url'),
+            'image_source': hotel.get('image_source'),
+            'provenance': hotel.get('provenance'),
+        })
+    return packages
 
 
 # ── Session Context & Voice Endpoints ─────────────────────────────

@@ -32,6 +32,12 @@ from .api_tracker import tracker
 
 logger = logging.getLogger(__name__)
 
+
+def _clean_image_refs(answer: str) -> str:
+    """Models sometimes prefix local image paths with 'sandbox:'; strip it."""
+    import re
+    return re.sub(r'\(sandbox:(/static/)', r'(\1', answer or '')
+
 DEFAULT_MODEL = os.getenv('WAYPOINT_AGENT_MODEL', 'gpt-4o')
 MAX_STEPS = 12
 
@@ -58,10 +64,18 @@ HOW TO WORK
   official websites but no prices. Use it to go deeper on a specific area,
   to find places rates coverage missed, or when rates are unavailable.
 - `places__describe_area` gives factual Wikipedia context about a neighbourhood.
-- `imagery__capture_hotel_view` takes a live screenshot of a hotel's own
-  website, or renders its exact coordinates on a map. Call it for your top
-  recommendations so the traveller can see the real place. Pass the website and
-  lat/lon you got from an earlier tool result.
+
+SHOWING THE TRAVELLER WHAT A PLACE LOOKS LIKE
+- Hotels from `hotel_rates` already carry real Booking.com photographs in
+  `image_url`. Those are real; reference them directly and do not re-capture.
+- For a screenshot of the hotel's OWN website, the rate result has no website
+  field. Call `places__match_hotel` with the hotel's name and lat/lon to
+  recover the official site, then pass that website to
+  `imagery__capture_hotel_view`. Do this for your single top pick.
+- If no website is found, call `imagery__capture_hotel_view` with just lat/lon
+  to render the exact location on a map.
+- Reference any captured image by the exact `image_url` string the tool
+  returned, with no prefix added.
 - `atlas_flights__search_flights` needs IATA codes and returns real bookable
   flights. Airport codes are yours to resolve (Bali is DPS, Singapore is SIN).
 - Search wide, then narrow. If the first result set misses the brief, adjust
@@ -100,10 +114,12 @@ class TripAgent:
     """Tool-calling trip planner."""
 
     def __init__(self, registry=None, model: str = DEFAULT_MODEL,
-                 max_steps: int = MAX_STEPS, api_key: Optional[str] = None):
+                 max_steps: int = MAX_STEPS, api_key: Optional[str] = None,
+                 request_timeout: float = 90.0):
         self.registry = registry or tool_registry
         self.model = model
         self.max_steps = max_steps
+        self.request_timeout = request_timeout
         self._api_key = api_key or os.getenv('OPENAI_API_KEY', '')
 
     # ── tool schema ──────────────────────────────────────────────
@@ -179,6 +195,10 @@ class TripAgent:
                 response = client.chat.completions.create(
                     model=self.model, messages=messages,
                     tools=tools, tool_choice='auto', temperature=0.2,
+                    # Without a cap the final write-up can run for minutes on a
+                    # large result set; a recommendation does not need more.
+                    max_tokens=1100,
+                    timeout=self.request_timeout,
                 )
             except Exception as exc:
                 logger.exception('Agent LLM call failed')
@@ -219,6 +239,14 @@ class TripAgent:
             stopped = 'max_steps'
             answer = answer or ('I ran out of planning steps before finishing. '
                                 'What I found so far is below — none of it is invented.')
+
+        # The model is not reliable about always fetching an image, and it once
+        # claimed no picture existed for a hotel that had one. Imagery is a
+        # guarantee of this system, not a decision left to the model: every
+        # hotel it actually recommended gets a real image or an explicit reason
+        # there is none.
+        self._ensure_imagery(answer, artifacts, sources, trace, on_step)
+        answer = _clean_image_refs(answer)
 
         return {
             'request': request,
@@ -317,6 +345,8 @@ class TripAgent:
             artifacts['images'].append(data)
         elif capability == 'find_photos':
             artifacts['images'].extend(data.get('photos') or [])
+        elif capability == 'match_hotel' and data.get('name'):
+            self._merge_hotels(artifacts['hotels'], [data])
         elif capability == 'describe_area' and data.get('summary'):
             artifacts['areas'].append(data)
 
@@ -362,7 +392,7 @@ class TripAgent:
                     'total_price', 'price_per_night', 'currency', 'lat', 'lon',
                     'website', 'distance_km', 'amenities', 'address')
                 if h.get(k) not in (None, '', [])
-            } for h in hotels[:15]]
+            } for h in hotels[:12]]
             if not data.get('has_prices', False):
                 payload['price_note'] = ('These hotels are real but have NO price data. '
                                          'Do not state a rate for them.')
@@ -376,7 +406,7 @@ class TripAgent:
                                       'flight_number', 'departure_time', 'arrival_time',
                                       'duration_minutes', 'stops')
                 if o.get(k) is not None
-            } for o in offers[:12]]
+            } for o in offers[:8]]
             return payload
 
         photos = data.get('photos')
@@ -398,6 +428,113 @@ class TripAgent:
         payload['data'] = {k: v for k, v in data.items() if k != 'provenance'}
         payload['count'] = 1
         return payload
+
+    def _ensure_imagery(self, answer: str, artifacts: Dict[str, List],
+                        sources: SourceReport, trace: List[TraceStep],
+                        on_step: Optional[Callable] = None, limit: int = 3) -> None:
+        """Guarantee a real image for every hotel the agent recommended.
+
+        Order of preference, all of them real:
+          1. the photograph the rate provider already returned
+          2. a live screenshot of the hotel's own website (via OSM match)
+          3. a map rendered on the hotel's exact coordinates
+        A hotel that reaches the end with none of these is marked as having no
+        image, which the UI shows as such.
+        """
+        hotels = artifacts.get('hotels') or []
+        if not hotels:
+            return
+
+        # Labelling a photo the provider already returned costs nothing, so do
+        # it for every hotel — otherwise cards past the top few look imageless.
+        for hotel in hotels:
+            if hotel.get('image_url') and not hotel.get('image_source'):
+                hotel['image_source'] = 'provider_photo'
+
+        lowered = (answer or '').lower()
+        recommended = [h for h in hotels if h.get('name', '').lower() in lowered]
+        if not recommended:
+            recommended = hotels[:limit]
+        recommended = recommended[:limit]
+
+        step_no = (trace[-1].step if trace else 0) + 1
+
+        for hotel in recommended:
+            if hotel.get('image_url'):
+                hotel['image_source'] = hotel.get('image_source') or 'provider_photo'
+                continue
+
+            website = hotel.get('website') or ''
+            lat, lon = hotel.get('lat'), hotel.get('lon')
+
+            # Recover the official website so we can screenshot the real site.
+            if not website and lat is not None and lon is not None:
+                match = self._safe_call('places', 'match_hotel', {
+                    'name': hotel.get('name', ''), 'lat': lat, 'lon': lon,
+                }, step_no, trace, sources, on_step)
+                step_no += 1
+                if match and match.is_success() and isinstance(match.data, dict):
+                    website = match.data.get('website') or ''
+                    for key in ('address', 'phone', 'osm_url', 'amenities'):
+                        if match.data.get(key) and not hotel.get(key):
+                            hotel[key] = match.data[key]
+                    if website:
+                        hotel['website'] = website
+
+            shot = self._safe_call('imagery', 'capture_hotel_view', {
+                'name': hotel.get('name', ''), 'website': website,
+                'lat': lat, 'lon': lon,
+                'prefer': 'website' if website else 'map',
+            }, step_no, trace, sources, on_step)
+            step_no += 1
+
+            if shot and shot.is_success() and isinstance(shot.data, dict):
+                hotel['image_url'] = shot.data.get('image_url')
+                hotel['image_source'] = shot.data.get('capture_mode')
+                hotel['image_provenance'] = shot.data.get('provenance')
+                artifacts['images'].append(shot.data)
+            else:
+                hotel['image_url'] = None
+                hotel['image_source'] = 'none'
+                hotel['image_note'] = (
+                    shot.message if shot else 'imagery tool unavailable')
+
+    def _safe_call(self, tool: str, capability: str, params: Dict[str, Any],
+                   step_no: int, trace: List[TraceStep], sources: SourceReport,
+                   on_step: Optional[Callable]) -> Optional[ToolResult]:
+        """Run a tool outside the model loop, still recording it in the trace."""
+        t0 = time.time()
+        try:
+            result = self.registry.execute(tool, capability, params)
+        except Exception as exc:
+            logger.warning('Enrichment %s.%s failed: %s', tool, capability, exc)
+            sources.note(tool, SourceStatus.FAILED, detail=str(exc)[:200])
+            result = None
+
+        step = TraceStep(
+            step=step_no, kind='tool_call', tool=tool, capability=capability,
+            params=params, status=result.status.value if result else 'error',
+            summary=(result.message if result else 'tool raised')[:200],
+            duration_ms=int((time.time() - t0) * 1000),
+            result_count=1 if result and result.is_success() else 0,
+        )
+        step.summary = f'[auto] {step.summary}'
+        trace.append(step)
+        if on_step:
+            on_step(step)
+
+        if result is not None:
+            data = result.data if isinstance(result.data, dict) else {}
+            prov = data.get('provenance')
+            if prov:
+                sources.add(Provenance(
+                    source=prov.get('source', tool),
+                    status=SourceStatus(prov.get('status', 'live')),
+                    url=prov.get('url', ''), license=prov.get('license', ''),
+                    detail=prov.get('detail', ''),
+                    attribution=prov.get('attribution', ''),
+                ))
+        return result
 
     @staticmethod
     def _track(response, duration_ms: int) -> None:

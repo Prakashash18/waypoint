@@ -38,11 +38,18 @@ CAPTURE_URL_PREFIX = '/static/captures'
 
 COMMONS_API = 'https://commons.wikimedia.org/w/api.php'
 
-# Text that means we captured an interstitial, not the hotel.
+# The page loaded, but what we got is not the hotel.
 BOT_WALL_MARKERS = (
     'just a moment', 'attention required', 'checking your browser',
     'enable javascript and cookies', 'access denied', 'are you a robot',
-    'verifying you are human', '403 forbidden', 'cloudflare',
+    'verifying you are human', '403 forbidden',
+)
+# The hotel's own server is broken or gone — distinct from being blocked,
+# and worth saying accurately in the trace.
+DEAD_SITE_MARKERS = (
+    'connection timed out', '522:', '523:', '521:', 'web server is down',
+    'origin is unreachable', 'this site can', 'domain for sale',
+    'account suspended', 'under construction', '404 not found',
 )
 
 # A Leaflet page we render ourselves — no API key, tiles straight from OSM.
@@ -196,15 +203,25 @@ class ImageryTool(ToolBase):
                         self._dismiss_cookie_banners(page)
                         title = (page.title() or '').lower()
                         body = (page.inner_text('body')[:1500] or '').lower()
-                        if any(m in title or m in body[:400] for m in BOT_WALL_MARKERS):
-                            return None, None, f'bot wall on {url} (title={page.title()[:40]!r})'
+                        haystack = f'{title} {body[:400]}'
+                        if any(m in haystack for m in DEAD_SITE_MARKERS):
+                            return None, None, (f"the hotel's own site is down "
+                                                f"({page.title()[:50]!r})")
+                        if any(m in haystack for m in BOT_WALL_MARKERS):
+                            return None, None, (f'site blocks automated visits '
+                                                f'({page.title()[:40]!r})')
                         page.screenshot(path=path)
                         real_title = page.title()
                     finally:
                         ctx.close()
                         browser.close()
             except Exception as exc:
-                return None, None, f'{type(exc).__name__}: {str(exc)[:120]}'
+                detail = str(exc)
+                if 'ERR_NAME_NOT_RESOLVED' in detail:
+                    return None, None, f'the domain {url} no longer exists'
+                if 'ERR_CONNECTION' in detail or 'Timeout' in type(exc).__name__:
+                    return None, None, f'{url} did not respond'
+                return None, None, f'{type(exc).__name__}: {detail[:110]}'
 
         if not os.path.exists(path) or os.path.getsize(path) < 8000:
             return None, None, 'screenshot was blank or too small'
