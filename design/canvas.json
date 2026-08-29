@@ -1,0 +1,22 @@
+{
+  "artboards": [
+    { "file": "Compose.dc.html",       "x": 0,    "y": 0,    "w": 1200, "h": 860, "title": "Compose — ask out loud" },
+    { "file": "Main.dc.html",          "x": 1300, "y": 0,    "w": 1240, "h": 940, "title": "Results — the trip, costed" },
+    { "file": "Deals.dc.html",         "x": 2640, "y": 0,    "w": 1240, "h": 880, "title": "Deals — no dates given" },
+    { "file": "Detail.dc.html",        "x": 0,    "y": 1100, "w": 940,  "h": 940, "title": "Stay detail — book at source" },
+    { "file": "VoiceBooking.dc.html",  "x": 1040, "y": 1100, "w": 940,  "h": 800, "title": "Booking the flight by voice" },
+    { "file": "MobileCompose.dc.html", "x": 2080, "y": 1100, "w": 390,  "h": 844, "title": "Compose — phone" },
+    { "file": "MobileResults.dc.html", "x": 2570, "y": 1100, "w": 390,  "h": 844, "title": "Results — phone, dark" }
+  ],
+  "annotations": [
+    { "id": "direction", "x": 0, "y": -190, "w": 470,
+      "text": "Direction: a warm field-guide feel — Newsreader for display, Karla for UI, one terracotta accent.\nPhotography and price carry the page; the mic is always within reach rather than hidden behind a button." },
+    { "id": "two-paths", "x": 1300, "y": -190, "w": 520,
+      "text": "Two different booking paths, deliberately not made to look alike.\nFlights are bookable here by voice (we hold the fare). Rooms are not — that button leaves for Booking.com, where the rate was quoted." },
+    { "id": "real-data", "x": 2640, "y": -190, "w": 480,
+      "text": "Every figure on these screens is real: fares from the Atlas CLI, rates, scores and photographs from Booking.com, the map from OpenStreetMap.\nNothing here is placeholder." },
+    { "id": "phones", "x": 2080, "y": 2000, "w": 400,
+      "text": "Phone screens keep the mic as the primary control and put the projected total first — the number you actually decide on." }
+  ],
+  "launch": { "view": "canvas" }
+}

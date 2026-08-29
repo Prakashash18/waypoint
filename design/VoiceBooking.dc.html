@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    .theme-dark {
+      --paper:#14120f; --surface:#1c1917; --surface-2:#241f1c;
+      --ink:#f0ebe3; --dim:#a89e92; --faint:#7a7168; --line:#2f2925;
+      --accent:#e08a68; --accent-soft:#2a1e18; --good:#86c79a;
+    }
+    body { margin:0; font-family:Karla, "Helvetica Neue", Arial, sans-serif; }
+    a { color:#e08a68; text-decoration:none; } a:hover { color:#f0ebe3; }
+    .serif { font-family:Newsreader, Georgia, serif; }
+    .mono { font-family:"IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  </style>
+</helmet>
+
+<div class="theme-dark" style="width:940px; height:800px; background:var(--paper); color:var(--ink); display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 30px; border-bottom:1px solid var(--line);">
+    <span class="mono" style="font-size:10.5px; letter-spacing:0.16em; text-transform:uppercase; color:var(--faint);">Booking the flight</span>
+    <button style="background:transparent; border:0; color:var(--dim); font:500 13.5px Karla, sans-serif; cursor:pointer;">Cancel</button>
+  </div>
+
+  <div style="flex-grow:1; padding:34px 30px; display:flex; flex-direction:column; align-items:center; gap:26px;">
+
+    <!-- what is about to happen, in full -->
+    <div style="width:100%; max-width:620px; background:var(--surface); border:1px solid var(--line); border-radius:16px; overflow:hidden;">
+      <div style="padding:18px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:14px; font-weight:600;">Malindo Air · round trip</span>
+        <span class="mono" style="font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--faint);">Price re-checked just now</span>
+      </div>
+      <div style="padding:20px 22px; display:flex; flex-direction:column; gap:15px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <span class="mono" style="font-size:12px; color:var(--faint); width:52px;">OD306</span>
+          <div style="display:flex; align-items:center; gap:12px; flex-grow:1;">
+            <div><p style="margin:0; font-size:18px; font-weight:600;">09:00</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">KUL</p></div>
+            <div style="flex-grow:1; display:flex; align-items:center; gap:6px;">
+              <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+              <span style="font-size:11px; color:var(--faint);">3h 00m</span>
+              <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+            </div>
+            <div style="text-align:right;"><p style="margin:0; font-size:18px; font-weight:600;">12:00</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">DPS</p></div>
+          </div>
+          <span style="font-size:12px; color:var(--faint); width:48px; text-align:right;">28 Sep</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px;">
+          <span class="mono" style="font-size:12px; color:var(--faint); width:52px;">OD192</span>
+          <div style="display:flex; align-items:center; gap:12px; flex-grow:1;">
+            <div><p style="margin:0; font-size:18px; font-weight:600;">11:55</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">DPS</p></div>
+            <div style="flex-grow:1; display:flex; align-items:center; gap:6px;">
+              <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+              <span style="font-size:11px; color:var(--faint);">3h 10m</span>
+              <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+            </div>
+            <div style="text-align:right;"><p style="margin:0; font-size:18px; font-weight:600;">15:05</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">KUL</p></div>
+          </div>
+          <span style="font-size:12px; color:var(--faint); width:48px; text-align:right;">2 Oct</span>
+        </div>
+      </div>
+      <div style="padding:16px 22px; border-top:1px solid var(--line); background:var(--surface-2); display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <p style="margin:0 0 3px; font-size:13px; color:var(--dim);">Two adults · Prakash and one guest</p>
+          <p style="margin:0; font-size:12.5px; color:var(--faint);">Seats assigned at check-in</p>
+        </div>
+        <p style="margin:0; font-size:25px; font-weight:700;">$308.72</p>
+      </div>
+    </div>
+
+    <!-- listening -->
+    <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
+      <div style="position:relative; width:110px; height:110px; display:flex; align-items:center; justify-content:center;">
+        <span style="position:absolute; inset:0; border-radius:999px; border:1px solid var(--accent); opacity:0.2;"></span>
+        <span style="position:absolute; inset:11px; border-radius:999px; border:1px solid var(--accent); opacity:0.4;"></span>
+        <div style="width:70px; height:70px; border-radius:999px; background:var(--accent); display:flex; align-items:center; justify-content:center;">
+          <div style="display:flex; align-items:center; gap:3px;">
+            <span style="width:3px; height:14px; background:#14120f; border-radius:2px; display:block;"></span>
+            <span style="width:3px; height:26px; background:#14120f; border-radius:2px; display:block;"></span>
+            <span style="width:3px; height:20px; background:#14120f; border-radius:2px; display:block;"></span>
+            <span style="width:3px; height:32px; background:#14120f; border-radius:2px; display:block;"></span>
+            <span style="width:3px; height:17px; background:#14120f; border-radius:2px; display:block;"></span>
+          </div>
+        </div>
+      </div>
+
+      <p class="serif" style="margin:0; font-size:27px; font-weight:400; text-align:center; letter-spacing:-0.015em; max-width:540px; line-height:1.35;">"Three hundred and eight dollars, seventy-two cents, for two. Shall I book it?"</p>
+
+      <div style="display:flex; align-items:center; gap:10px; padding:9px 16px; background:var(--surface); border:1px solid var(--line); border-radius:999px;">
+        <span style="width:7px; height:7px; border-radius:99px; background:var(--good); display:block;"></span>
+        <span style="font-size:13.5px; color:var(--dim);">Listening — say <span style="color:var(--ink); font-weight:600;">"yes, book it"</span></span>
+      </div>
+    </div>
+
+    <!-- explicit out -->
+    <div style="width:100%; max-width:620px; display:flex; gap:12px; margin-top:auto;">
+      <button style="flex-grow:1; padding:15px; background:var(--accent); color:#14120f; border:0; border-radius:12px; font:700 15px Karla, sans-serif; cursor:pointer;">Confirm and book</button>
+      <button style="padding:15px 24px; background:transparent; color:var(--ink); border:1px solid var(--line); border-radius:12px; font:600 15px Karla, sans-serif; cursor:pointer;">Not yet</button>
+    </div>
+    <p style="margin:0; font-size:12.5px; color:var(--faint); text-align:center; max-width:520px; line-height:1.55;">Nothing is charged until you confirm. The fare was re-checked with the airline a moment ago and is held for this screen only.</p>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

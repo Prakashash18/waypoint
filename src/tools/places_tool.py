@@ -40,7 +40,14 @@ WIKI_ATTRIBUTION = 'Text from Wikipedia (CC BY-SA 4.0)'
 OVERPASS_ENDPOINTS = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://overpass.osm.jp/api/interpreter',
 ]
+
+# How OSM marks an airport people actually fly from. A major hub carries
+# aerodrome=international; Seletar carries it too but is tagged regional, and
+# an air base carries military tags — hence the tiering rather than a flag.
+AIRPORT_TIER_BOOST = {3: 6.0, 2: 1.5, 1: 1.0}
 
 NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 WIKI_SUMMARY_URL = 'https://en.wikipedia.org/api/rest_v1/page/summary/{title}'
@@ -141,6 +148,21 @@ class PlacesTool(ToolBase):
                 returns='list[Hotel]',
             ),
             ToolCapability(
+                name='nearest_airports',
+                description=(
+                    'Find the real airports nearest a set of coordinates, with IATA '
+                    'codes and distances. Use this to work out where the traveller is '
+                    'actually flying from instead of assuming a hub.'
+                ),
+                parameters={
+                    'lat': 'Latitude',
+                    'lon': 'Longitude',
+                    'radius_km': 'How far to look (default 250, max 600)',
+                    'limit': 'Max airports to return (default 5)',
+                },
+                returns='list[Airport]',
+            ),
+            ToolCapability(
                 name='match_hotel',
                 description=(
                     'Look up a hotel you already know by name and coordinates in '
@@ -172,6 +194,8 @@ class PlacesTool(ToolBase):
     def execute(self, capability: str, params: Dict[str, Any]) -> ToolResult:
         if capability == 'find_hotels':
             return self.find_hotels(params)
+        if capability == 'nearest_airports':
+            return self.nearest_airports(params)
         if capability == 'match_hotel':
             return self.match_hotel(params)
         if capability == 'geocode_place':
@@ -316,16 +340,8 @@ class PlacesTool(ToolBase):
             message=f'Found {len(hotels)} real hotels near {geo.data["display_name"]}',
         )
 
-    def _overpass_hotels(self, lat: float, lon: float, radius: int):
-        """Query Overpass across mirrors. Returns (elements, error)."""
-        query = (
-            f'[out:json][timeout:25];'
-            f'('
-            f'node["tourism"~"^(hotel|resort|guest_house|hostel)$"](around:{radius},{lat},{lon});'
-            f'way["tourism"~"^(hotel|resort|guest_house|hostel)$"](around:{radius},{lat},{lon});'
-            f');'
-            f'out center tags 200;'
-        )
+    def _overpass(self, query: str):
+        """POST a query to Overpass, trying each mirror. Returns (elements, error)."""
         last_err = ''
         for endpoint in OVERPASS_ENDPOINTS:
             try:
@@ -342,6 +358,18 @@ class PlacesTool(ToolBase):
                 last_err = f'{endpoint} {type(exc).__name__}: {exc}'
                 logger.warning('Overpass %s', last_err)
         return None, last_err
+
+    def _overpass_hotels(self, lat: float, lon: float, radius: int):
+        """Query Overpass for lodging around a point. Returns (elements, error)."""
+        query = (
+            f'[out:json][timeout:25];'
+            f'('
+            f'node["tourism"~"^(hotel|resort|guest_house|hostel)$"](around:{radius},{lat},{lon});'
+            f'way["tourism"~"^(hotel|resort|guest_house|hostel)$"](around:{radius},{lat},{lon});'
+            f');'
+            f'out center tags 200;'
+        )
+        return self._overpass(query)
 
     @staticmethod
     def _normalize(el: Dict[str, Any], clat: float, clon: float,
@@ -414,6 +442,119 @@ class PlacesTool(ToolBase):
             'image_url': None,
         }
         return stamp(record, prov)
+
+    # ── airports ─────────────────────────────────────────────────
+
+    def nearest_airports(self, params: Dict[str, Any]) -> ToolResult:
+        """Real airports near a point, from OpenStreetMap.
+
+        This replaced a hardcoded ten-airport table that silently returned
+        nothing outside a handful of hubs, which is how the agent ended up
+        assuming everyone departs from Kuala Lumpur.
+        """
+        lat, lon = params.get('lat'), params.get('lon')
+        if lat is None or lon is None:
+            return ToolResult(status=ToolStatus.ERROR,
+                              message='lat and lon are required', error='Missing coordinates')
+        lat, lon = float(lat), float(lon)
+        radius = min(int(params.get('radius_km', 250) or 250), 600)
+        limit = int(params.get('limit', 5) or 5)
+
+        cache_key = f'apt:{lat:.2f},{lon:.2f}:{radius}'
+        elements = self._cache.get(cache_key)
+        cached = elements is not None
+
+        if not cached:
+            query = (
+                f'[out:json][timeout:25];'
+                f'('
+                f'node["aeroway"="aerodrome"]["iata"](around:{radius * 1000},{lat},{lon});'
+                f'way["aeroway"="aerodrome"]["iata"](around:{radius * 1000},{lat},{lon});'
+                f'relation["aeroway"="aerodrome"]["iata"](around:{radius * 1000},{lat},{lon});'
+                f');'
+                f'out center tags 80;'
+            )
+            elements, err = self._overpass(query)
+            if elements is None:
+                prov = Provenance('osm', SourceStatus.FAILED, detail=err or 'unknown error')
+                return ToolResult(
+                    status=ToolStatus.ERROR, data={'provenance': prov.to_dict(), 'airports': []},
+                    message=f'Could not reach OpenStreetMap to find airports near '
+                            f'{lat:.3f},{lon:.3f}: {err}',
+                    error=err)
+            self._cache.set(cache_key, elements)
+
+        prov = Provenance('osm', SourceStatus.CACHED if cached else SourceStatus.LIVE,
+                          license='ODbL', attribution=OSM_ATTRIBUTION,
+                          detail=f'aeroway=aerodrome with an IATA code within {radius}km')
+
+        import math
+        airports = []
+        for el in elements:
+            tags = el.get('tags', {}) or {}
+            iata = (tags.get('iata') or '').strip().upper()
+            # Some OSM nodes carry several codes in one tag; take the first valid one.
+            iata = iata.split(';')[0].strip()
+            if len(iata) != 3 or not iata.isalpha():
+                continue
+            alat = el.get('lat') or (el.get('center') or {}).get('lat')
+            alon = el.get('lon') or (el.get('center') or {}).get('lon')
+            if alat is None or alon is None:
+                continue
+            dx = math.radians(alon - lon) * math.cos(math.radians((alat + lat) / 2)) * 6371
+            dy = math.radians(alat - lat) * 6371
+            kind = (tags.get('aerodrome:type') or '').lower()
+            # An air base is not somewhere anyone buys a ticket from.
+            if kind == 'military' or tags.get('military') or tags.get('access') == 'private':
+                continue
+
+            is_intl = tags.get('aerodrome') == 'international' or kind == 'international'
+            if kind == 'international':
+                tier = 3
+            elif is_intl and kind != 'regional':
+                tier = 3
+            elif kind == 'regional' or tags.get('icao'):
+                tier = 2
+            else:
+                tier = 1
+
+            airports.append({
+                'iata': iata,
+                'icao': tags.get('icao', ''),
+                'name': tags.get('name') or tags.get('name:en') or iata,
+                'city': tags.get('addr:city') or tags.get('is_in:city') or '',
+                'lat': alat,
+                'lon': alon,
+                'distance_km': round(math.hypot(dx, dy), 1),
+                'international': is_intl,
+                'tier': tier,
+            })
+
+        # A hub 45km out beats an airstrip 9km out: weight distance by tier
+        # rather than sorting on raw proximity.
+        airports.sort(key=lambda a: a['distance_km'] / AIRPORT_TIER_BOOST[a['tier']])
+        seen, unique = set(), []
+        for a in airports:
+            if a['iata'] not in seen:
+                seen.add(a['iata'])
+                unique.append(a)
+        unique = unique[:limit]
+
+        if not unique:
+            prov_none = Provenance('osm', SourceStatus.UNAVAILABLE,
+                                   detail=f'no IATA airport within {radius}km')
+            return ToolResult(status=ToolStatus.NO_RESULTS,
+                              data={'airports': [], 'provenance': prov_none.to_dict()},
+                              message=f'No airport with an IATA code within {radius}km')
+
+        return ToolResult(
+            status=ToolStatus.SUCCESS,
+            data={'airports': unique, 'count': len(unique),
+                  'origin': {'lat': lat, 'lon': lon},
+                  'provenance': prov.to_dict()},
+            message=(f"Nearest airport is {unique[0]['iata']} ({unique[0]['name']}), "
+                     f"{unique[0]['distance_km']}km away"),
+        )
 
     # ── matching a known hotel back to OSM ───────────────────────
 

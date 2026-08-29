@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    .theme-light {
+      --paper:#faf7f2; --surface:#ffffff; --surface-2:#f3eee6;
+      --ink:#241f1a; --dim:#6b6157; --faint:#9a9086; --line:#e8e1d6;
+      --accent:#b45332; --accent-soft:#f8ece7; --good:#3f6b4a; --shadow:0 1px 2px rgba(36,31,26,.05), 0 10px 26px rgba(36,31,26,.05);
+    }
+    .theme-dark {
+      --paper:#14120f; --surface:#1c1917; --surface-2:#241f1c;
+      --ink:#f0ebe3; --dim:#a89e92; --faint:#7a7168; --line:#2f2925;
+      --accent:#e08a68; --accent-soft:#2a1e18; --good:#86c79a; --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 26px rgba(0,0,0,.24);
+    }
+    body { margin:0; font-family:Karla, "Helvetica Neue", Arial, sans-serif; }
+    a { color:var(--accent); text-decoration:none; }
+    a:hover { color:var(--ink); }
+    .serif { font-family:Newsreader, Georgia, "Times New Roman", serif; }
+    .mono { font-family:"IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  </style>
+</helmet>
+
+<div class="theme-{{theme}}" style="width:1240px; height:940px; background:var(--paper); color:var(--ink); display:flex; flex-direction:column;">
+
+  <!-- top bar -->
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 32px; border-bottom:1px solid var(--line); background:var(--surface);">
+    <div style="display:flex; align-items:center; gap:11px;">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21s7-6.3 7-11.4A7 7 0 0 0 5 9.6C5 14.7 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/>
+      </svg>
+      <span class="serif" style="font-size:19px; font-weight:500;">Waypoint</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; flex-grow:1; justify-content:center;">
+      <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; background:var(--surface-2); border-radius:999px;">
+        <span style="font-size:13.5px; color:var(--ink); font-weight:500;">Ubud, Bali</span>
+        <span style="width:3px; height:3px; border-radius:99px; background:var(--faint); display:block;"></span>
+        <span style="font-size:13.5px; color:var(--dim);">28 Sep – 2 Oct</span>
+        <span style="width:3px; height:3px; border-radius:99px; background:var(--faint); display:block;"></span>
+        <span style="font-size:13.5px; color:var(--dim);">2 adults</span>
+        <span style="width:3px; height:3px; border-radius:99px; background:var(--faint); display:block;"></span>
+        <span style="font-size:13.5px; color:var(--dim);">under $900</span>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:9px; padding:7px 13px; border:1px solid var(--line); border-radius:999px;">
+      <span style="width:7px; height:7px; border-radius:99px; background:var(--good); display:block;"></span>
+      <span style="font-size:13px; color:var(--dim);">Voice on</span>
+    </div>
+  </div>
+
+  <div style="flex-grow:1; display:flex; flex-direction:column; gap:18px; padding:26px 32px 0; overflow:hidden;">
+
+    <!-- projected total -->
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:28px; padding:22px 26px; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow);">
+      <div>
+        <p class="mono" style="margin:0 0 7px; font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--faint);">Projected total</p>
+        <div style="display:flex; align-items:baseline; gap:12px;">
+          <span class="serif" style="font-size:46px; font-weight:400; letter-spacing:-0.02em; line-height:1;">$391.97</span>
+          <span style="font-size:15px; color:var(--dim);">for two · 4 nights</span>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:26px;">
+        <div style="text-align:right;">
+          <p style="margin:0 0 3px; font-size:12.5px; color:var(--faint);">Flights</p>
+          <p style="margin:0; font-size:17px; font-weight:600;">$308.72</p>
+        </div>
+        <span style="font-size:19px; color:var(--faint);">+</span>
+        <div style="text-align:right;">
+          <p style="margin:0 0 3px; font-size:12.5px; color:var(--faint);">Stay</p>
+          <p style="margin:0; font-size:17px; font-weight:600;">$83.25</p>
+        </div>
+        <div style="width:1px; height:42px; background:var(--line);"></div>
+        <div style="padding:9px 15px; background:var(--accent-soft); border-radius:10px;">
+          <p style="margin:0; font-size:13.5px; font-weight:600; color:var(--good);">$508 under budget</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- the two bookable pieces -->
+    <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px;">
+
+      <!-- flight card: booked by voice -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line);">
+          <div style="display:flex; align-items:center; gap:9px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--dim)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5a2.1 2.1 0 0 0-3-3L13 8 4.8 6.2a.6.6 0 0 0-.6.9l3 4.5-2.4 2.4-2-.4a.6.6 0 0 0-.5 1l2 2 2 2a.6.6 0 0 0 1-.5l-.4-2 2.4-2.4 4.5 3a.6.6 0 0 0 .9-.6z"/></svg>
+            <span style="font-size:14px; font-weight:600;">Flights</span>
+          </div>
+          <span class="mono" style="font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--faint); padding:4px 8px; border:1px solid var(--line); border-radius:6px;">Atlas · live fare</span>
+        </div>
+
+        <div style="padding:18px 20px; display:flex; flex-direction:column; gap:16px; flex-grow:1;">
+          <!-- outbound -->
+          <div style="display:flex; align-items:center; gap:16px;">
+            <div style="width:52px;">
+              <p class="mono" style="margin:0; font-size:12px; color:var(--faint);">OD306</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; flex-grow:1;">
+              <div><p style="margin:0; font-size:19px; font-weight:600;">09:00</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">KUL</p></div>
+              <div style="flex-grow:1; display:flex; align-items:center; gap:6px;">
+                <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+                <span style="font-size:11px; color:var(--faint); white-space:nowrap;">3h 00m</span>
+                <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+              </div>
+              <div style="text-align:right;"><p style="margin:0; font-size:19px; font-weight:600;">12:00</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">DPS</p></div>
+            </div>
+            <span style="font-size:12px; color:var(--faint); width:52px; text-align:right;">28 Sep</span>
+          </div>
+          <!-- return -->
+          <div style="display:flex; align-items:center; gap:16px;">
+            <div style="width:52px;">
+              <p class="mono" style="margin:0; font-size:12px; color:var(--faint);">OD192</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; flex-grow:1;">
+              <div><p style="margin:0; font-size:19px; font-weight:600;">11:55</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">DPS</p></div>
+              <div style="flex-grow:1; display:flex; align-items:center; gap:6px;">
+                <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+                <span style="font-size:11px; color:var(--faint); white-space:nowrap;">3h 10m</span>
+                <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+              </div>
+              <div style="text-align:right;"><p style="margin:0; font-size:19px; font-weight:600;">15:05</p><p style="margin:2px 0 0; font-size:12px; color:var(--dim);">KUL</p></div>
+            </div>
+            <span style="font-size:12px; color:var(--faint); width:52px; text-align:right;">2 Oct</span>
+          </div>
+
+          <div style="display:flex; align-items:baseline; gap:9px; padding-top:4px;">
+            <span style="font-size:22px; font-weight:700;">$308.72</span>
+            <span style="font-size:13px; color:var(--dim);">both fares · $154.36 each</span>
+          </div>
+        </div>
+
+        <div style="padding:0 20px 18px;">
+          <button style="width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:14px; background:var(--accent); color:#fff; border:0; border-radius:11px; font:600 15px Karla, sans-serif; cursor:pointer;">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+            Hold to book by voice
+          </button>
+          <p style="margin:9px 0 0; font-size:12px; color:var(--faint); text-align:center;">You'll confirm passengers and price out loud before anything is charged</p>
+        </div>
+      </div>
+
+      <!-- hotel card: booked on the source site -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column;">
+        <div style="position:relative; height:158px;">
+          <img src="pacha_house.jpg" alt="Pacha House, Ubud" style="width:100%; height:100%; object-fit:cover; display:block;">
+          <span class="mono" style="position:absolute; top:12px; left:12px; font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:#fff; background:rgba(20,18,15,0.62); padding:5px 9px; border-radius:6px;">Booking.com photo</span>
+        </div>
+
+        <div style="padding:16px 20px; display:flex; flex-direction:column; gap:9px; flex-grow:1;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+            <h3 class="serif" style="margin:0; font-size:23px; font-weight:500; letter-spacing:-0.01em;">Pacha House</h3>
+            <div style="display:flex; align-items:center; gap:7px; flex:none;">
+              <span style="font-size:15px; font-weight:700; color:var(--good);">9.2</span>
+              <span style="font-size:12px; color:var(--dim);">259 reviews</span>
+            </div>
+          </div>
+          <p style="margin:0; font-size:13.5px; color:var(--dim);">Ubud · quiet lane, 10 min walk to Monkey Forest Road</p>
+          <div style="display:flex; align-items:baseline; gap:9px; margin-top:auto; padding-top:8px;">
+            <span style="font-size:22px; font-weight:700;">$83.25</span>
+            <span style="font-size:13px; color:var(--dim);">4 nights · $20.81 a night</span>
+          </div>
+        </div>
+
+        <div style="padding:0 20px 18px;">
+          <button style="width:100%; display:flex; align-items:center; justify-content:center; gap:9px; padding:14px; background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:11px; font:600 15px Karla, sans-serif; cursor:pointer;">
+            Book on Booking.com
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16 16 8M9 8h7v7"/></svg>
+          </button>
+          <p style="margin:9px 0 0; font-size:12px; color:var(--faint); text-align:center;">Rooms are held and paid for on their site, not here</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- shifting the dates -->
+    <div style="padding:16px 22px; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow);">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:13px;">
+        <p class="mono" style="margin:0; font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--faint);">If you can shift the dates</p>
+        <p style="margin:0; font-size:13px; color:var(--good); font-weight:600;">Leaving two days earlier saves $24</p>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px;">
+
+        <div style="padding:12px 14px; border:1px solid var(--good); background:var(--accent-soft); border-radius:11px;">
+          <p style="margin:0 0 5px; font-size:12.5px; color:var(--dim);">26 – 30 Sep</p>
+          <p style="margin:0 0 4px; font-size:18px; font-weight:700;">$367.57</p>
+          <p class="mono" style="margin:0; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--good);">Cheapest</p>
+        </div>
+        <div style="padding:12px 14px; border:1px solid var(--line); border-radius:11px;">
+          <p style="margin:0 0 5px; font-size:12.5px; color:var(--dim);">27 Sep – 1 Oct</p>
+          <p style="margin:0 0 4px; font-size:18px; font-weight:700;">$383.13</p>
+          <p style="margin:0; font-size:11.5px; color:var(--faint);">+$16</p>
+        </div>
+        <div style="padding:12px 14px; border:1.5px solid var(--accent); border-radius:11px; background:var(--surface-2);">
+          <p style="margin:0 0 5px; font-size:12.5px; color:var(--ink); font-weight:600;">28 Sep – 2 Oct</p>
+          <p style="margin:0 0 4px; font-size:18px; font-weight:700;">$391.97</p>
+          <p class="mono" style="margin:0; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent);">Your dates</p>
+        </div>
+        <div style="padding:12px 14px; border:1px solid var(--line); border-radius:11px;">
+          <p style="margin:0 0 5px; font-size:12.5px; color:var(--dim);">29 Sep – 3 Oct</p>
+          <p style="margin:0 0 4px; font-size:18px; font-weight:700;">$385.59</p>
+          <p style="margin:0; font-size:11.5px; color:var(--faint);">−$6</p>
+        </div>
+        <div style="padding:12px 14px; border:1px solid var(--line); border-radius:11px;">
+          <p style="margin:0 0 5px; font-size:12.5px; color:var(--dim);">30 Sep – 4 Oct</p>
+          <p style="margin:0 0 4px; font-size:18px; font-weight:700;">$369.65</p>
+          <p style="margin:0; font-size:11.5px; color:var(--good);">−$22</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- keep talking -->
+  <div style="display:flex; align-items:center; gap:16px; padding:16px 32px; border-top:1px solid var(--line); background:var(--surface);">
+    <button style="width:46px; height:46px; flex:none; border-radius:999px; border:0; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+    </button>
+    <div style="display:flex; flex-direction:column; gap:8px; flex-grow:1;">
+      <p style="margin:0; font-size:13px; color:var(--faint);">Hold to keep talking — or try</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:13px; color:var(--dim); padding:7px 13px; background:var(--surface-2); border-radius:999px;">"What if we left on the 26th?"</span>
+        <span style="font-size:13px; color:var(--dim); padding:7px 13px; background:var(--surface-2); border-radius:999px;">"Anything with a pool nearby?"</span>
+        <span style="font-size:13px; color:var(--dim); padding:7px 13px; background:var(--surface-2); border-radius:999px;">"Compare these two"</span>
+        <span style="font-size:13px; color:var(--dim); padding:7px 13px; background:var(--surface-2); border-radius:999px;">"Book the flight"</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1240,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'light' };
+  }
+}
+</script>
+</body>
+</html>

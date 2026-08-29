@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    .theme-light {
+      --paper:#faf7f2; --surface:#ffffff; --surface-2:#f3eee6;
+      --ink:#241f1a; --dim:#6b6157; --faint:#9a9086; --line:#e8e1d6;
+      --accent:#b45332; --accent-soft:#f8ece7; --good:#3f6b4a;
+    }
+    .theme-dark {
+      --paper:#14120f; --surface:#1c1917; --surface-2:#241f1c;
+      --ink:#f0ebe3; --dim:#a89e92; --faint:#7a7168; --line:#2f2925;
+      --accent:#e08a68; --accent-soft:#2a1e18; --good:#86c79a;
+    }
+    body { margin:0; font-family:Karla, "Helvetica Neue", Arial, sans-serif; }
+    a { color:var(--accent); text-decoration:none; }
+    a:hover { color:var(--ink); }
+    .serif { font-family:Newsreader, Georgia, "Times New Roman", serif; }
+    .mono { font-family:"IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  </style>
+</helmet>
+
+<div class="theme-light" style="width:1200px; height:860px; background:var(--paper); color:var(--ink); display:flex; flex-direction:column;">
+
+  <!-- top bar -->
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:26px 40px; border-bottom:1px solid var(--line);">
+    <div style="display:flex; align-items:center; gap:11px;">
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#b45332" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21s7-6.3 7-11.4A7 7 0 0 0 5 9.6C5 14.7 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/>
+      </svg>
+      <span class="serif" style="font-size:21px; font-weight:500; letter-spacing:-0.01em;">Waypoint</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:9px; padding:7px 13px; border:1px solid var(--line); border-radius:999px; background:var(--surface);">
+      <span style="width:7px; height:7px; border-radius:99px; background:var(--good); display:block;"></span>
+      <span style="font-size:13px; color:var(--dim);">Voice on</span>
+    </div>
+  </div>
+
+  <!-- centre -->
+  <div style="flex-grow:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; padding:0 40px;">
+
+    <p class="mono" style="margin:0 0 18px; font-size:11.5px; letter-spacing:0.18em; text-transform:uppercase; color:var(--faint);">Plan a trip</p>
+
+    <h1 class="serif" style="margin:0 0 14px; font-size:66px; line-height:1.04; font-weight:400; letter-spacing:-0.025em; text-align:center; max-width:760px; text-wrap:balance;">Where are we going?</h1>
+
+    <p style="margin:0 0 22px; font-size:17px; line-height:1.55; color:var(--dim); text-align:center; max-width:540px; text-wrap:pretty;">Say it the way you would to a friend. Dates are optional — without them we'll go looking for the cheapest window.</p>
+
+    <!-- where you are, detected rather than assumed -->
+    <div style="display:flex; align-items:center; gap:10px; padding:9px 15px 9px 13px; background:var(--surface); border:1px solid var(--line); border-radius:999px; margin-bottom:40px;">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/>
+      </svg>
+      <span style="font-size:13.5px; color:var(--dim);">Flying from</span>
+      <span style="font-size:13.5px; color:var(--ink); font-weight:600;">Kuala Lumpur · KUL</span>
+      <span style="width:3px; height:3px; border-radius:99px; background:var(--faint); display:block;"></span>
+      <a href="#" style="font-size:13.5px;">change</a>
+    </div>
+
+    <!-- mic -->
+    <div style="display:flex; flex-direction:column; align-items:center; gap:14px; margin-bottom:38px;">
+      <div style="position:relative; width:132px; height:132px; display:flex; align-items:center; justify-content:center;">
+        <span style="position:absolute; inset:0; border-radius:999px; border:1px solid var(--line);"></span>
+        <span style="position:absolute; inset:12px; border-radius:999px; border:1px solid var(--accent); opacity:0.28;"></span>
+        <button style="width:96px; height:96px; border-radius:999px; border:0; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 10px 30px rgba(180,83,50,0.28);">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/>
+          </svg>
+        </button>
+      </div>
+      <p style="margin:0; font-size:14.5px; font-weight:600; color:var(--ink);">Hold to speak</p>
+    </div>
+
+    <!-- typed alternative -->
+    <div style="display:flex; align-items:center; gap:14px; width:100%; max-width:620px; margin-bottom:20px;">
+      <span style="flex-grow:1; height:1px; background:var(--line); display:block;"></span>
+      <span style="font-size:12.5px; color:var(--faint);">or type it</span>
+      <span style="flex-grow:1; height:1px; background:var(--line); display:block;"></span>
+    </div>
+
+    <div style="width:100%; max-width:620px; display:flex; align-items:center; gap:10px; padding:15px 16px 15px 20px; background:var(--surface); border:1px solid var(--line); border-radius:14px;">
+      <span style="flex-grow:1; font-size:15.5px; color:var(--faint);">A few quiet nights in Bali, under $900, whenever is cheapest…</span>
+      <button style="border:0; background:var(--surface-2); color:var(--ink); border-radius:9px; padding:9px 15px; font:600 14px Karla, sans-serif; cursor:pointer;">Plan</button>
+    </div>
+  </div>
+
+  <!-- what it draws on -->
+  <div style="display:flex; align-items:center; justify-content:center; gap:26px; padding:22px 40px 30px; border-top:1px solid var(--line);">
+    <span class="mono" style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint);">Looks at</span>
+    <div style="display:flex; align-items:center; gap:22px;">
+      <span style="font-size:13.5px; color:var(--dim);">Live flight fares</span>
+      <span style="width:3px; height:3px; border-radius:99px; background:var(--line); display:block;"></span>
+      <span style="font-size:13.5px; color:var(--dim);">Real rooms and rates</span>
+      <span style="width:3px; height:3px; border-radius:99px; background:var(--line); display:block;"></span>
+      <span style="font-size:13.5px; color:var(--dim);">Photographs of the actual place</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

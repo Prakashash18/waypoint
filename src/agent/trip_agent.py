@@ -56,9 +56,30 @@ ABSOLUTE RULES
    have NO prices — describing one, say the price is not available.
 4. Only reference an image the imagery tool actually captured.
 
+MONEY AND TIME — READ THIS BEFORE QUOTING ANYTHING
+- `price_total` on a flight offer is the fare for EVERYONE on the booking.
+  `price_per_passenger` is the per-person fare. Say which one you mean. Calling
+  a two-adult total a per-person price doubles the trip in the traveller's head.
+- Quote in the traveller's own currency when one is known (see below), and name
+  the currency. Never convert between currencies yourself — you have no rate.
+  If a price came back in a different currency, say so plainly.
+- Flight times are LOCAL TO EACH AIRPORT, which is how airlines publish them.
+  When the traveller's timezone differs from the departure airport's, say so
+  rather than silently implying their own clock.
+
+WHERE THE TRAVELLER IS
+- Do not assume a home airport. If you have not been told where they are,
+  call `locale__detect_locale` first, then `places__nearest_airports` with the
+  coordinates it returns, and fly them from the nearest sensible airport.
+- Say which airport you chose and why, so they can correct it in one sentence.
+
 HOW TO WORK
 - Resolve dates before searching. Today is {today}. Convert relative dates
   ("next month", "in 3 weeks") to YYYY-MM-DD yourself.
+- NO DATES GIVEN, or the traveller says "whenever is cheapest" / "sometime in
+  October" / "if we shifted a few days": use `atlas_flights__find_date_deals`,
+  which prices several windows and returns them cheapest first. Do not invent
+  a date and search once — the whole question was which date to pick.
 - For prices and bookable stays use `hotel_rates__search_hotels`.
 - `places__find_hotels` gives real OpenStreetMap hotels with coordinates and
   official websites but no prices. Use it to go deeper on a specific area,
@@ -167,8 +188,9 @@ class TripAgent:
         started = time.time()
         trace: List[TraceStep] = []
         sources = SourceReport()
-        artifacts: Dict[str, List[Dict[str, Any]]] = {
+        artifacts: Dict[str, Any] = {
             'hotels': [], 'flights': [], 'images': [], 'areas': [],
+            'windows': [], 'airports': [], 'locale': None,
         }
 
         if not self._api_key:
@@ -178,6 +200,22 @@ class TripAgent:
         client = openai.OpenAI(api_key=self._api_key)
 
         system = SYSTEM_PROMPT.format(today=date.today().isoformat())
+
+        locale = self._resolve_locale(context, artifacts, sources)
+        if locale:
+            where = ', '.join(filter(None, [locale.get('city'), locale.get('country')]))
+            system += (
+                f"\n\nTHE TRAVELLER IS IN {where or 'an unknown place'}"
+                f" (detected from their {locale.get('source', 'ip')})."
+                f"\n- Quote prices in {locale['currency']}"
+                f" (symbol {locale.get('currency_symbol', '')})."
+                f" Pass currency={locale['currency']} to every search."
+                f"\n- Their timezone is {locale.get('timezone') or 'unknown'}"
+                f" {locale.get('utc_offset_label', '')}."
+                f"\n- Their coordinates are {locale.get('lat')}, {locale.get('lon')} —"
+                f" use places__nearest_airports on these to pick a departure airport"
+                f" unless they named one."
+            )
         if context:
             system += f"\n\nKnown so far: {json.dumps(context, default=str)}"
 
@@ -260,6 +298,41 @@ class TripAgent:
             'duration_ms': int((time.time() - started) * 1000),
             'model': self.model,
         }
+
+    def _resolve_locale(self, context: Optional[Dict[str, Any]],
+                        artifacts: Dict[str, Any],
+                        sources: SourceReport) -> Optional[Dict[str, Any]]:
+        """Find out where the traveller is before the model starts guessing.
+
+        The old agent assumed Kuala Lumpur and quoted USD at everyone. Doing
+        this once up front costs one call and removes both assumptions.
+        """
+        supplied = (context or {}).get('locale')
+        if isinstance(supplied, dict) and supplied.get('currency'):
+            artifacts['locale'] = supplied
+            return supplied
+
+        params = {k: (context or {}).get(k) for k in ('lat', 'lon', 'timezone')}
+        params = {k: v for k, v in params.items() if v is not None}
+        try:
+            result = self.registry.execute('locale', 'detect_locale', params)
+        except Exception as exc:
+            logger.warning('Locale detection failed: %s', exc)
+            sources.note('locale', SourceStatus.FAILED, detail=str(exc)[:160])
+            return None
+
+        data = result.data if isinstance(result.data, dict) else {}
+        prov = data.get('provenance')
+        if prov:
+            sources.add(Provenance(
+                source=prov.get('source', 'locale'),
+                status=SourceStatus(prov.get('status', 'live')),
+                url=prov.get('url', ''), detail=prov.get('detail', ''),
+                attribution=prov.get('attribution', '')))
+        if result.is_success() and data.get('detected'):
+            artifacts['locale'] = data
+            return data
+        return None
 
     # ── tool execution ───────────────────────────────────────────
 
@@ -345,6 +418,12 @@ class TripAgent:
             artifacts['images'].append(data)
         elif capability == 'find_photos':
             artifacts['images'].extend(data.get('photos') or [])
+        elif capability == 'find_date_deals':
+            artifacts['windows'] = data.get('windows') or artifacts['windows']
+        elif capability == 'nearest_airports':
+            artifacts['airports'] = data.get('airports') or artifacts['airports']
+        elif capability == 'detect_locale' and data.get('detected'):
+            artifacts['locale'] = data
         elif capability == 'match_hotel' and data.get('name'):
             self._merge_hotels(artifacts['hotels'], [data])
         elif capability == 'describe_area' and data.get('summary'):
@@ -402,11 +481,35 @@ class TripAgent:
         if offers is not None:
             payload['count'] = len(offers)
             payload['offers'] = [{
-                k: o.get(k) for k in ('offer_id', 'price', 'currency', 'airline',
-                                      'flight_number', 'departure_time', 'arrival_time',
-                                      'duration_minutes', 'stops')
+                k: o.get(k) for k in (
+                    'offer_id', 'flight_code', 'airline', 'price_total',
+                    'price_per_passenger', 'passengers', 'currency', 'origin',
+                    'destination', 'departure_time', 'arrival_time',
+                    'duration_minutes', 'stops', 'round_trip', 'return_leg')
                 if o.get(k) is not None
             } for o in offers[:8]]
+            payload['price_note'] = (
+                'price_total covers ALL passengers on the booking; '
+                'price_per_passenger is the per-person fare. Do not confuse them.')
+            return payload
+
+        windows = data.get('windows')
+        if windows is not None:
+            payload['count'] = len(windows)
+            payload['windows'] = windows[:9]
+            payload['cheapest'] = data.get('cheapest')
+            payload['saving_vs_anchor'] = data.get('saving_vs_anchor')
+            if data.get('unpriced_dates'):
+                payload['unpriced_dates'] = data['unpriced_dates']
+                payload['unpriced_note'] = ('No fare came back for these dates. Say they '
+                                            'could not be checked; do not estimate them.')
+            payload['price_note'] = 'Every price_total covers all passengers.'
+            return payload
+
+        airports = data.get('airports')
+        if airports is not None:
+            payload['count'] = len(airports)
+            payload['airports'] = airports[:5]
             return payload
 
         photos = data.get('photos')

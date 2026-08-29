@@ -305,17 +305,58 @@ def get_location():
         if lat is None or lon is None:
             return jsonify({'error': 'Latitude and longitude required'}), 400
         
-        # Find nearby airports
-        nearby = LocationService.find_nearby_airports(lat, lon, radius_km=200)
-        
+        # Uses OpenStreetMap rather than the old ten-airport table, which
+        # returned nothing for most of the world.
+        from src.tools import tool_registry
+        result = tool_registry.execute('places', 'nearest_airports',
+                                       {'lat': lat, 'lon': lon, 'limit': 5})
+        nearby = result.data.get('airports', []) if result.is_success() else []
+
         return jsonify({
             'success': True,
             'airports': nearby,
-            'location': {'lat': lat, 'lon': lon}
+            'location': {'lat': lat, 'lon': lon},
+            'message': result.message,
         })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/locale', methods=['GET', 'POST'])
+def detect_locale():
+    """Where the traveller is, and the currency and clock to use.
+
+    POST browser coordinates and timezone for precision; with no body it falls
+    back to IP. Also returns the airports they could realistically fly from,
+    so nothing downstream has to assume a home hub.
+    """
+    from src.tools import tool_registry
+
+    data = request.json if request.method == 'POST' and request.is_json else {}
+    params = {k: (data or {}).get(k) for k in ('lat', 'lon', 'timezone')}
+    params = {k: v for k, v in params.items() if v is not None}
+
+    result = tool_registry.execute('locale', 'detect_locale', params)
+    locale = result.data if isinstance(result.data, dict) else {}
+
+    airports = []
+    if locale.get('lat') is not None and locale.get('lon') is not None:
+        try:
+            near = tool_registry.execute('places', 'nearest_airports', {
+                'lat': locale['lat'], 'lon': locale['lon'], 'limit': 4})
+            if near.is_success():
+                airports = near.data.get('airports', [])
+        except Exception:
+            app.logger.warning('Nearest-airport lookup failed', exc_info=True)
+
+    return jsonify({
+        'success': result.is_success(),
+        'locale': locale,
+        'airports': airports,
+        'origin_airport': airports[0] if airports else None,
+        'message': result.message,
+    })
 
 
 @app.route('/api/flight-delays', methods=['GET'])
@@ -679,6 +720,9 @@ def list_sources():
             {'id': 'aviationstack', 'label': 'AviationStack',
              'provides': 'live flight delays',
              'configured': bool(os.getenv('AVIATIONSTACK_API_KEY'))},
+            {'id': 'ip-api', 'label': 'ip-api.com',
+             'provides': 'the traveller\'s location, currency and timezone',
+             'configured': True},
             {'id': 'openai', 'label': 'OpenAI',
              'provides': 'the planning agent itself',
              'configured': bool(os.getenv('OPENAI_API_KEY'))},

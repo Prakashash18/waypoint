@@ -1,0 +1,2 @@
+Shared token block pasted into each artboard's <helmet>.
+Kept here so the artboards stay in sync when edited by hand.

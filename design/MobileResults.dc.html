@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    .theme-dark {
+      --paper:#14120f; --surface:#1c1917; --surface-2:#241f1c;
+      --ink:#f0ebe3; --dim:#a89e92; --faint:#7a7168; --line:#2f2925;
+      --accent:#e08a68; --accent-soft:#2a1e18; --good:#86c79a;
+    }
+    body { margin:0; font-family:Karla, "Helvetica Neue", Arial, sans-serif; }
+    a { color:#e08a68; text-decoration:none; } a:hover { color:#f0ebe3; }
+    .serif { font-family:Newsreader, Georgia, serif; }
+    .mono { font-family:"IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  </style>
+</helmet>
+
+<div class="theme-dark" style="width:390px; height:844px; background:var(--paper); color:var(--ink); display:flex; flex-direction:column; padding-top:52px;">
+
+  <div style="display:flex; align-items:center; gap:10px; padding:0 18px 14px; border-bottom:1px solid var(--line);">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--dim)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"/></svg>
+    <div style="flex-grow:1;">
+      <p style="margin:0; font-size:14px; font-weight:600;">Ubud, Bali</p>
+      <p style="margin:2px 0 0; font-size:12px; color:var(--dim);">28 Sep – 2 Oct · 2 adults</p>
+    </div>
+    <span style="width:7px; height:7px; border-radius:99px; background:var(--good); display:block;"></span>
+  </div>
+
+  <div style="flex-grow:1; padding:16px 18px; display:flex; flex-direction:column; gap:13px; overflow:hidden;">
+
+    <!-- total -->
+    <div style="padding:16px 18px; background:var(--surface); border:1px solid var(--line); border-radius:15px;">
+      <p class="mono" style="margin:0 0 7px; font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--faint);">Projected total</p>
+      <div style="display:flex; align-items:baseline; gap:9px; margin-bottom:9px;">
+        <span class="serif" style="font-size:36px; font-weight:400; letter-spacing:-0.02em; line-height:1;">$391.97</span>
+        <span style="font-size:13px; color:var(--dim);">for two</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:12.5px; color:var(--dim);">$308.72 flights</span>
+        <span style="width:3px; height:3px; border-radius:99px; background:var(--faint); display:block;"></span>
+        <span style="font-size:12.5px; color:var(--dim);">$83.25 stay</span>
+        <span style="margin-left:auto; font-size:12px; font-weight:600; color:var(--good);">$508 under</span>
+      </div>
+    </div>
+
+    <!-- flight -->
+    <div style="padding:15px 17px; background:var(--surface); border:1px solid var(--line); border-radius:15px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <span style="font-size:13px; font-weight:600;">Malindo Air · return</span>
+        <span style="font-size:15px; font-weight:700;">$308.72</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:9px;">
+        <div><p style="margin:0; font-size:16px; font-weight:600;">09:00</p><p style="margin:1px 0 0; font-size:11px; color:var(--dim);">KUL</p></div>
+        <div style="flex-grow:1; display:flex; align-items:center; gap:5px;">
+          <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+          <span style="font-size:10.5px; color:var(--faint);">3h</span>
+          <span style="flex-grow:1; height:1px; background:var(--line);"></span>
+        </div>
+        <div style="text-align:right;"><p style="margin:0; font-size:16px; font-weight:600;">12:00</p><p style="margin:1px 0 0; font-size:11px; color:var(--dim);">DPS</p></div>
+      </div>
+      <button style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:13px; background:var(--accent); color:#14120f; border:0; border-radius:11px; font:700 14.5px Karla, sans-serif; cursor:pointer;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+        Book by voice
+      </button>
+    </div>
+
+    <!-- hotel -->
+    <div style="background:var(--surface); border:1px solid var(--line); border-radius:15px; overflow:hidden;">
+      <img src="pacha_house.jpg" alt="Pacha House" style="width:100%; height:120px; object-fit:cover; display:block;">
+      <div style="padding:13px 17px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:4px;">
+          <h3 class="serif" style="margin:0; font-size:19px; font-weight:500;">Pacha House</h3>
+          <span style="font-size:14px; font-weight:700; color:var(--good);">9.2</span>
+        </div>
+        <p style="margin:0 0 11px; font-size:12.5px; color:var(--dim);">$83.25 · 4 nights · 259 reviews</p>
+        <button style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:13px; background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:11px; font:600 14.5px Karla, sans-serif; cursor:pointer;">
+          Book on Booking.com
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16 16 8M9 8h7v7"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- keep talking -->
+  <div style="padding:13px 18px 30px; border-top:1px solid var(--line); background:var(--surface); display:flex; align-items:center; gap:13px;">
+    <button style="width:50px; height:50px; flex:none; border-radius:999px; border:0; background:var(--accent); color:#14120f; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+    </button>
+    <div style="display:flex; flex-direction:column; gap:5px; min-width:0;">
+      <p style="margin:0; font-size:12px; color:var(--faint);">Hold to ask</p>
+      <p style="margin:0; font-size:13.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">"What if we left on the 26th?"</p>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

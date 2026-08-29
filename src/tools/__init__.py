@@ -18,9 +18,10 @@ from .flight_status_tool import FlightStatusTool
 from .places_tool import PlacesTool
 from .hotel_rates_tool import HotelRatesTool
 from .imagery_tool import ImageryTool
+from .locale_tool import LocaleTool
 
 # Tools that do not self-register on import are registered here, once.
-for _tool in (PlacesTool(), HotelRatesTool(), ImageryTool()):
+for _tool in (PlacesTool(), HotelRatesTool(), ImageryTool(), LocaleTool()):
     if not tool_registry.get(_tool.name):
         tool_registry.register(_tool)
 
@@ -29,4 +30,5 @@ __all__ = [
     'Provenance', 'SourceReport', 'SourceStatus', 'stamp',
     'ToolRegistry', 'tool_registry',
     'AtlasTool', 'FlightStatusTool', 'PlacesTool', 'HotelRatesTool', 'ImageryTool',
+    'LocaleTool',
 ]

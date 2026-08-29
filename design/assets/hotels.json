@@ -1,0 +1,67 @@
+[
+  {
+    "file": "sandy_house.jpg",
+    "name": "Sandy House",
+    "total": 34.94,
+    "ppn": 8.74,
+    "score": 0,
+    "reviews": 0,
+    "area": "Ubud",
+    "lat": -8.5164072,
+    "lon": 115.2481959,
+    "nights": 4,
+    "currency": "USD"
+  },
+  {
+    "file": "saka_house.jpg",
+    "name": "Saka House",
+    "total": 78.62,
+    "ppn": 19.66,
+    "score": 8.8,
+    "reviews": 256,
+    "area": "Ubud",
+    "lat": -8.520034,
+    "lon": 115.271046,
+    "nights": 4,
+    "currency": "USD"
+  },
+  {
+    "file": "pacha_house.jpg",
+    "name": "Pacha House",
+    "total": 83.25,
+    "ppn": 20.81,
+    "score": 9.2,
+    "reviews": 259,
+    "area": "Ubud",
+    "lat": -8.509387,
+    "lon": 115.265874,
+    "nights": 4,
+    "currency": "USD"
+  },
+  {
+    "file": "ubudku_villas.jpg",
+    "name": "Ubudku Villas",
+    "total": 88.14,
+    "ppn": 22.04,
+    "score": 7.9,
+    "reviews": 447,
+    "area": "Ubud",
+    "lat": -8.50877661234393,
+    "lon": 115.267757950779,
+    "nights": 4,
+    "currency": "USD"
+  },
+  {
+    "file": "griya_tropical.jpg",
+    "name": "Griya tropical",
+    "total": 88.38,
+    "ppn": 22.09,
+    "score": 9.2,
+    "reviews": 127,
+    "area": "Ubud",
+    "lat": -8.53796495240101,
+    "lon": 115.282823672702,
+    "nights": 4,
+    "currency": "USD"
+  }
+]
