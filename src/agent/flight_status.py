@@ -6,8 +6,12 @@ Provides real-time flight delay information and location-based airport detection
 import requests
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+import logging
 import os
 from .api_tracker import tracker
+
+
+logger = logging.getLogger(__name__)
 
 
 class LocationService:
@@ -102,25 +106,29 @@ class FlightStatusService:
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv('AVIATIONSTACK_API_KEY')
+        # Why the last call returned nothing, so callers can say so out loud.
+        self.last_error: str = ''
     
     def get_delays_from_airport(
         self,
         airport_code: str,
         days: int = 3
     ) -> List[Dict[str, Any]]:
-        """Get delayed flights from an airport for the next N days"""
-        
-        # Check simulate toggle first
-        if tracker.simulate_delays:
-            return self._get_simulated_delays(airport_code, days)
-        
-        # Try real API first
-        if self.api_key:
-            return self._get_delays_from_api(airport_code, days)
-        else:
-            # Return simulated data for demo
-            return self._get_simulated_delays(airport_code, days)
-    
+        """Get delayed flights departing an airport.
+
+        Returns real AviationStack data or an empty list. It never returns
+        invented flights: a made-up delay would send a traveller rebooking
+        around a disruption that is not happening.
+        """
+        if not self.api_key:
+            self.last_error = (
+                'AVIATIONSTACK_API_KEY is not set, so live delay data is '
+                'unavailable. Sign up free at https://aviationstack.com'
+            )
+            return []
+
+        return self._get_delays_from_api(airport_code, days)
+
     def _get_delays_from_api(
         self,
         airport_code: str,
@@ -175,87 +183,21 @@ class FlightStatusService:
                 delays.sort(key=lambda x: x.get('scheduled_departure', ''))
                 return delays
         
+            # A 200 with no 'data' key means the provider refused the query.
+            self.last_error = (
+                f"AviationStack returned no flight data for {airport_code}: "
+                f"{data.get('error') or 'unexpected response shape'}"
+            )
+            return []
+
         except Exception as e:
             tracker.record_aviationstack(
                 endpoint=f"flights?dep_iata={airport_code}",
                 status="error",
             )
-            print(f"AviationStack API error: {e}")
-        
-        # Fall back to simulated data on any error
-        return self._get_simulated_delays(airport_code, days)
-    
-    def _get_simulated_delays(
-        self,
-        airport_code: str,
-        days: int
-    ) -> List[Dict[str, Any]]:
-        """
-        Generate SIMULATED delay data for demo purposes.
-        
-        WARNING: This is NOT real flight data. It is randomly generated
-        for demonstration only. To get real delays, add an AviationStack
-        or FlightAware API key to .env.
-        
-        Uses routes known to exist in the Atlas CLI sandbox.
-        """
-        import random
-        
-        # Routes that Atlas CLI sandbox actually serves
-        routes = {
-            'KUL': ['SIN', 'BKK', 'PEN', 'LGK', 'JHB', 'KCH', 'BKI'],
-            'SIN': ['KUL', 'BKK', 'PEN', 'HKG', 'DPS'],
-            'BKK': ['KUL', 'SIN', 'CNX', 'HKT', 'PEN'],
-        }
-        
-        airlines_with_codes = [
-            ('AirAsia', 'AK'),
-            ('Malaysia Airlines', 'MH'),
-            ('Singapore Airlines', 'SQ'),
-            ('Scoot', 'TR'),
-            ('Jetstar', '3K'),
-        ]
-        
-        available_dests = routes.get(airport_code, ['SIN', 'BKK', 'PEN', 'HKG'])
-        
-        delays = []
-        now = datetime.utcnow()
-        
-        # Start from TOMORROW to ensure Atlas CLI has flights for the date
-        for day in range(1, days + 1):
-            date = now + timedelta(days=day)
-            
-            # Generate 5-10 delayed flights per day
-            num_delays = random.randint(5, 10)
-            
-            for i in range(num_delays):
-                hour = random.randint(6, 22)
-                minute = random.choice([0, 15, 30, 45])
-                scheduled = date.replace(hour=hour, minute=minute, second=0)
-                
-                delay_minutes = random.choice([15, 30, 45, 60, 90, 120, 180])
-                actual = scheduled + timedelta(minutes=delay_minutes)
-                
-                destination = random.choice(available_dests)
-                airline_name, airline_code = random.choice(airlines_with_codes)
-                flight_num = f"{airline_code}{random.randint(100, 999)}"
-                
-                delays.append({
-                    'flight_number': flight_num,
-                    'airline': airline_name,
-                    'departure_airport': airport_code,
-                    'arrival_airport': destination,
-                    'scheduled_departure': scheduled.isoformat() + 'Z',
-                    'actual_departure': actual.isoformat() + 'Z',
-                    'delay_minutes': delay_minutes,
-                    'status': 'delayed',
-                    'terminal': f"T{random.randint(1, 2)}",
-                    'gate': f"{random.choice(['A', 'B', 'C', 'D'])}{random.randint(1, 20)}"
-                })
-        
-        # Sort by scheduled departure
-        delays.sort(key=lambda x: x['scheduled_departure'])
-        return delays
+            logger.warning("AviationStack error for %s: %s", airport_code, e)
+            self.last_error = f'AviationStack request failed: {e}'
+            return []
     
     @staticmethod
     def _calculate_delay(scheduled: str, actual: str) -> int:
