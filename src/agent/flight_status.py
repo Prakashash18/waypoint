@@ -15,75 +15,60 @@ logger = logging.getLogger(__name__)
 
 
 class LocationService:
-    """Detect user location and find nearby airports"""
-    
-    # Major airports with their coordinates
-    AIRPORT_DATABASE = {
-        'KUL': {'name': 'Kuala Lumpur International', 'lat': 2.7456, 'lon': 101.7099, 'city': 'Kuala Lumpur'},
-        'SIN': {'name': 'Singapore Changi', 'lat': 1.3644, 'lon': 103.9915, 'city': 'Singapore'},
-        'BKK': {'name': 'Bangkok Suvarnabhumi', 'lat': 13.6900, 'lon': 100.7501, 'city': 'Bangkok'},
-        'HKG': {'name': 'Hong Kong International', 'lat': 22.3080, 'lon': 113.9185, 'city': 'Hong Kong'},
-        'NRT': {'name': 'Tokyo Narita', 'lat': 35.7647, 'lon': 140.3864, 'city': 'Tokyo'},
-        'ICN': {'name': 'Seoul Incheon', 'lat': 37.4602, 'lon': 126.4407, 'city': 'Seoul'},
-        'JFK': {'name': 'New York JFK', 'lat': 40.6413, 'lon': -73.7781, 'city': 'New York'},
-        'LAX': {'name': 'Los Angeles International', 'lat': 33.9425, 'lon': -118.4081, 'city': 'Los Angeles'},
-        'LHR': {'name': 'London Heathrow', 'lat': 51.4700, 'lon': -0.4543, 'city': 'London'},
-        'CDG': {'name': 'Paris Charles de Gaulle', 'lat': 49.0097, 'lon': 2.5479, 'city': 'Paris'},
-    }
-    
+    """Nearest airports for a set of coordinates.
+
+    This used to carry a ten-airport table, which returned nothing for most of
+    the world — Lisbon and Denver both came back empty. It now delegates to
+    PlacesTool, which queries OpenStreetMap and falls back to a bundled
+    reference of major airports. Kept as a thin shim because the UI and the
+    older tool both import it.
+    """
+
     @classmethod
-    def find_nearby_airports(cls, lat: float, lon: float, radius_km: int = 100) -> List[Dict[str, Any]]:
-        """Find airports within radius of given coordinates"""
-        nearby = []
-        
-        for code, airport in cls.AIRPORT_DATABASE.items():
-            distance = cls._haversine_distance(lat, lon, airport['lat'], airport['lon'])
-            if distance <= radius_km:
-                nearby.append({
-                    'code': code,
-                    'name': airport['name'],
-                    'city': airport['city'],
-                    'distance_km': round(distance, 1)
-                })
-        
-        # Sort by distance
-        nearby.sort(key=lambda x: x['distance_km'])
-        return nearby
-    
+    def find_nearby_airports(cls, lat: float, lon: float,
+                             radius_km: int = 250) -> List[Dict[str, Any]]:
+        """Airports near a point, nearest first.
+
+        Returns the historical shape (`code`, `name`, `city`, `distance_km`) so
+        existing callers keep working, with `iata` alongside for new ones.
+        """
+        from ..tools.places_tool import PlacesTool
+
+        result = PlacesTool().nearest_airports(
+            {'lat': lat, 'lon': lon, 'radius_km': radius_km, 'limit': 6})
+        if not result.is_success():
+            return []
+
+        return [
+            {
+                'code': airport['iata'],
+                'iata': airport['iata'],
+                'name': airport['name'],
+                'city': airport.get('city', ''),
+                'distance_km': airport['distance_km'],
+            }
+            for airport in result.data.get('airports', [])
+        ]
+
     @classmethod
     def get_airport_by_ip(cls, ip: str = None) -> Optional[Dict[str, Any]]:
-        """Get nearest airport based on IP geolocation"""
-        try:
-            # Use free IP geolocation API
-            if ip:
-                url = f"http://ip-api.com/json/{ip}"
-            else:
-                url = "http://ip-api.com/json"
-            
-            response = requests.get(url, timeout=5)
-            data = response.json()
-            
-            if data.get('status') == 'success':
-                lat = data['lat']
-                lon = data['lon']
-                
-                # Find nearest airport
-                nearby = cls.find_nearby_airports(lat, lon, radius_km=200)
-                if nearby:
-                    return nearby[0]
-                
-                # Return location info even if no airport found
-                return {
-                    'city': data.get('city', 'Unknown'),
-                    'country': data.get('country', 'Unknown'),
-                    'lat': lat,
-                    'lon': lon
-                }
-        except Exception:
-            pass
-        
-        return None
-    
+        """Nearest airport from an IP address."""
+        from ..tools.locale_tool import LocaleTool
+
+        locale = LocaleTool().detect_locale({})
+        if not locale.is_success():
+            return None
+        data = locale.data or {}
+        if data.get('lat') is None:
+            return None
+
+        nearby = cls.find_nearby_airports(data['lat'], data['lon'], radius_km=250)
+        if not nearby:
+            return None
+        return {**nearby[0], 'location': {'lat': data['lat'], 'lon': data['lon'],
+                                          'city': data.get('city', ''),
+                                          'country': data.get('country', '')}}
+
     @staticmethod
     def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Calculate distance between two points in km"""

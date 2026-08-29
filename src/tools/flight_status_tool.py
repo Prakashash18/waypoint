@@ -1,6 +1,9 @@
 """FlightStatusTool — wraps FlightStatusService for the tool registry.
 
-Capabilities: check_delays, find_nearby_airports
+Capabilities: check_delays
+
+Airport lookup lives in PlacesTool. Two tools answering the same question let
+the model pick the weaker one, and this one only knew ten airports.
 """
 
 from __future__ import annotations
@@ -9,7 +12,7 @@ import logging
 from typing import Any, Dict, List
 
 from .base import ToolBase, ToolCapability, ToolError, ToolResult, ToolStatus
-from ..agent.flight_status import FlightStatusService, LocationService
+from ..agent.flight_status import FlightStatusService
 
 logger = logging.getLogger(__name__)
 
@@ -40,23 +43,11 @@ class FlightStatusTool(ToolBase):
                 },
                 returns='list[DelayedFlight]',
             ),
-            ToolCapability(
-                name='find_nearby_airports',
-                description='Find airports near given coordinates',
-                parameters={
-                    'lat': 'Latitude',
-                    'lon': 'Longitude',
-                    'radius_km': 'Search radius in km (default 100)',
-                },
-                returns='list[Airport]',
-            ),
         ]
     
     def execute(self, capability: str, params: Dict[str, Any]) -> ToolResult:
         if capability == 'check_delays':
             return self._check_delays(params)
-        elif capability == 'find_nearby_airports':
-            return self._find_nearby_airports(params)
         else:
             raise ToolError(
                 f"Unknown capability: {capability}",
@@ -102,42 +93,6 @@ class FlightStatusTool(ToolBase):
                 error='DELAY_CHECK_FAILED',
             )
     
-    def _find_nearby_airports(self, params: Dict[str, Any]) -> ToolResult:
-        lat = params.get('lat')
-        lon = params.get('lon')
-        radius = params.get('radius_km', 100)
-        
-        if lat is None or lon is None:
-            return ToolResult(
-                status=ToolStatus.ERROR,
-                message='lat and lon are required',
-                error='Missing parameters',
-            )
-        
-        try:
-            airports = LocationService.find_nearby_airports(float(lat), float(lon), int(radius))
-            
-            if not airports:
-                return ToolResult(
-                    status=ToolStatus.NO_RESULTS,
-                    message=f'No airports found within {radius}km',
-                    data={'airports': []},
-                )
-            
-            return ToolResult(
-                status=ToolStatus.SUCCESS,
-                data={'airports': airports},
-                message=f'Found {len(airports)} airports nearby',
-            )
-            
-        except Exception as e:
-            return ToolResult(
-                status=ToolStatus.ERROR,
-                message=f'Failed to find airports: {str(e)}',
-                error='AIRPORT_SEARCH_FAILED',
-            )
-
-
 # Auto-register on import
 from .registry import tool_registry
 tool_registry.register(FlightStatusTool())

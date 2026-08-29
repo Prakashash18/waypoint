@@ -57,7 +57,6 @@ class APICallTracker:
     def __init__(self):
         self._calls: List[APICall] = []
         self._lock = threading.Lock()
-        self._simulate_delays: bool = False
 
     # ── Recording ──────────────────────────────────────────────
 
@@ -162,7 +161,6 @@ class APICallTracker:
                 'total_tokens_in': total_tokens_in,
                 'total_tokens_out': total_tokens_out,
                 'by_service': by_service,
-                'simulate_delays': self._simulate_delays,
             }
 
     def recent(self, n: int = 20) -> List[dict]:
@@ -180,13 +178,7 @@ class APICallTracker:
 
     # ── Simulate Toggle ────────────────────────────────────────
 
-    @property
-    def simulate_delays(self) -> bool:
-        return self._simulate_delays
 
-    @simulate_delays.setter
-    def simulate_delays(self, value: bool):
-        self._simulate_delays = value
 
 
 # Singleton instance used across the application

@@ -603,23 +603,6 @@ def export_tracker_log():
     return jsonify(json.loads(tracker.export_json()))
 
 
-@app.route('/api/tracker/simulate', methods=['POST'])
-def toggle_simulate():
-    """Toggle simulated delay data"""
-    data = request.get_json()
-    enabled = data.get('enabled', True)
-    tracker.simulate_delays = enabled
-    
-    return jsonify({
-        'success': True,
-        'simulate_delays': enabled,
-        'message': f"Simulated delays {'enabled' if enabled else 'disabled'}. "
-                   f"{'Showing fake data from Changi' if enabled else 'Showing real data from AviationStack'}"
-    })
-
-
-# ── Plan My Trip (Tool Registry) ──────────────────────────────────
-
 @app.route('/api/tools', methods=['GET'])
 def list_tools():
     """List all registered tools and their capabilities"""
