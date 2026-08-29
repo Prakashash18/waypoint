@@ -340,15 +340,16 @@ class PlacesTool(ToolBase):
             message=f'Found {len(hotels)} real hotels near {geo.data["display_name"]}',
         )
 
-    def _overpass(self, query: str):
+    def _overpass(self, query: str, timeout: Optional[int] = None):
         """POST a query to Overpass, trying each mirror. Returns (elements, error)."""
         last_err = ''
+        budget = timeout if timeout is not None else self._timeout + 20
         for endpoint in OVERPASS_ENDPOINTS:
             try:
                 resp = self._session.post(
                     endpoint, data=query.encode('utf-8'),
                     headers={'Content-Type': 'text/plain; charset=utf-8'},
-                    timeout=self._timeout + 20,
+                    timeout=budget,
                 )
                 if resp.status_code == 200:
                     return resp.json().get('elements', []), None
@@ -474,14 +475,11 @@ class PlacesTool(ToolBase):
                 f');'
                 f'out center tags 80;'
             )
-            elements, err = self._overpass(query)
+            # Short timeout: this sits on the critical path of every search, and
+            # Overpass routinely takes over a minute when it is busy.
+            elements, err = self._overpass(query, timeout=20)
             if elements is None:
-                prov = Provenance('osm', SourceStatus.FAILED, detail=err or 'unknown error')
-                return ToolResult(
-                    status=ToolStatus.ERROR, data={'provenance': prov.to_dict(), 'airports': []},
-                    message=f'Could not reach OpenStreetMap to find airports near '
-                            f'{lat:.3f},{lon:.3f}: {err}',
-                    error=err)
+                return self._airports_from_reference(lat, lon, radius, limit, err)
             self._cache.set(cache_key, elements)
 
         prov = Provenance('osm', SourceStatus.CACHED if cached else SourceStatus.LIVE,
@@ -541,6 +539,11 @@ class PlacesTool(ToolBase):
         unique = unique[:limit]
 
         if not unique:
+            # OSM answered but had nothing usable; the bundled list may still.
+            fallback = self._airports_from_reference(lat, lon, radius, limit,
+                                                     'OpenStreetMap listed no usable airport')
+            if fallback.is_success():
+                return fallback
             prov_none = Provenance('osm', SourceStatus.UNAVAILABLE,
                                    detail=f'no IATA airport within {radius}km')
             return ToolResult(status=ToolStatus.NO_RESULTS,
@@ -554,6 +557,38 @@ class PlacesTool(ToolBase):
                   'provenance': prov.to_dict()},
             message=(f"Nearest airport is {unique[0]['iata']} ({unique[0]['name']}), "
                      f"{unique[0]['distance_km']}km away"),
+        )
+
+    @staticmethod
+    def _airports_from_reference(lat: float, lon: float, radius: int, limit: int,
+                                 why: str) -> ToolResult:
+        """Fall back to the bundled airport list when Overpass will not answer.
+
+        These are real airports from a local reference, not live data, so the
+        provenance says so rather than implying a lookup that did not happen.
+        """
+        from .airports import nearest
+
+        found = nearest(lat, lon, radius_km=max(radius, 300), limit=limit)
+        if not found:
+            prov = Provenance('osm', SourceStatus.FAILED, detail=why)
+            return ToolResult(
+                status=ToolStatus.ERROR,
+                data={'airports': [], 'provenance': prov.to_dict()},
+                message=(f'Could not find an airport near {lat:.3f},{lon:.3f}: {why}'),
+                error=why)
+
+        prov = Provenance('builtin', SourceStatus.CACHED,
+                          detail=f'bundled airport reference ({why})',
+                          attribution='Major airport reference bundled with Waypoint')
+        return ToolResult(
+            status=ToolStatus.SUCCESS,
+            data={'airports': found, 'count': len(found),
+                  'origin': {'lat': lat, 'lon': lon},
+                  'fallback': True, 'provenance': prov.to_dict()},
+            message=(f"Nearest airport is {found[0]['iata']} ({found[0]['name']}), "
+                     f"{found[0]['distance_km']}km away — from the bundled list, "
+                     f"because the live lookup was unavailable"),
         )
 
     # ── matching a known hotel back to OSM ───────────────────────

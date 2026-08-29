@@ -36,6 +36,8 @@ SOURCE_LABELS = {
     'liteapi':    'LiteAPI',
     'booking_rapidapi': 'Booking.com (RapidAPI)',
     'openai':     'OpenAI',
+    'ip-api':     'ip-api.com',
+    'builtin':    'Bundled airport reference',
 }
 
 

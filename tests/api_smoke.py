@@ -245,6 +245,46 @@ def test_stack():
            res.status.value if not err else 'exception', ms,
            res.message[:120] if not err else str(err)[:120])
 
+    # The bug that started this: Atlas quotes one price for the whole party.
+    from src.tools.atlas_tool import AtlasTool
+    (res, ms, err) = timed(lambda: AtlasTool().execute('search_flights', {
+        'origin': 'KUL', 'destination': 'DPS', 'depart': DEPART,
+        'return_date': RETURN, 'adults': 2}))
+    if err:
+        record('flight price is per-party', False, type(err).__name__, ms, str(err)[:160])
+    else:
+        offers = (res.data or {}).get('offers', [])
+        best = min(offers, key=lambda o: o['price_total']) if offers else {}
+        ok = bool(best) and best.get('passengers') == 2 and best.get('price_per_passenger') \
+             and abs(best['price_per_passenger'] * 2 - best['price_total']) < 0.05
+        record('flight price is per-party', ok,
+               f"total={best.get('price_total')} each={best.get('price_per_passenger')} "
+               f"pax={best.get('passengers')}", ms)
+        record('  └ both legs and real airports', bool(best.get('return_leg'))
+               and bool(best.get('origin')) and bool(best.get('destination')),
+               f"{best.get('origin')}→{best.get('destination')} "
+               f"round_trip={best.get('round_trip')}")
+
+    # The hardcoded ten-airport table used to miss KUL entirely.
+    for city, (la, lo), expect in (('Kuala Lumpur', (3.139, 101.687), 'KUL'),
+                                   ('Singapore', (1.3521, 103.8198), 'SIN'),
+                                   ('Lisbon', (38.72, -9.14), 'LIS')):
+        (res, ms, err) = timed(lambda a=la, b=lo: places.nearest_airports({'lat': a, 'lon': b}))
+        if err:
+            record(f'nearest airport · {city}', False, type(err).__name__, ms); continue
+        got = [a['iata'] for a in (res.data or {}).get('airports', [])]
+        record(f'nearest airport · {city}', bool(got) and got[0] == expect,
+               f"{expect} expected, got {got[:3]}", ms)
+
+    from src.tools.locale_tool import LocaleTool
+    (res, ms, err) = timed(lambda: LocaleTool().detect_locale({}))
+    if err:
+        record('locale detection', False, type(err).__name__, ms, str(err)[:160])
+    else:
+        d = res.data or {}
+        record('locale detection', bool(d.get('currency')) and bool(d.get('lat')),
+               f"{d.get('city')}, {d.get('country')} · {d.get('currency')} · {d.get('timezone')}", ms)
+
     imagery = ImageryTool()
     (res, ms, err) = timed(lambda: imagery.capture_hotel_view(
         {'name': 'Maya Ubud', 'website': 'http://www.mayaubud.com',
@@ -348,8 +388,10 @@ def test_alternatives():
                json.dumps(d[0])[:200] if d else r.text[:160])
 
     q = '[out:json][timeout:20];node["tourism"="hotel"](around:3000,-8.5069,115.2625);out 5;'
-    (r, ms, err) = timed(lambda: requests.post('https://overpass-api.de/api/interpreter',
-                                               data={'data': q}, timeout=40))
+    (r, ms, err) = timed(lambda: requests.post(
+        'https://overpass-api.de/api/interpreter', data=q.encode('utf-8'),
+        headers={'User-Agent': 'waypoint-smoke-test/1.0',
+                 'Content-Type': 'text/plain; charset=utf-8'}, timeout=60))
     if err:
         record('overpass hotels near Ubud', False, type(err).__name__, ms, str(err)[:160])
     else:
@@ -369,8 +411,9 @@ def test_alternatives():
     (r, ms, err) = timed(lambda: requests.get(
         'https://commons.wikimedia.org/w/api.php',
         params={'action': 'query', 'generator': 'geosearch', 'ggscoord': '-8.5069|115.2625',
-                'ggsradius': 2000, 'ggslimit': 3, 'prop': 'imageinfo',
-                'iiprop': 'url', 'iiurlwidth': 640, 'format': 'json'},
+                'ggsradius': 8000, 'ggslimit': 3, 'ggsnamespace': 6,
+                'prop': 'imageinfo', 'iiprop': 'url', 'iiurlwidth': 640,
+                'format': 'json'},
         headers={'User-Agent': 'waypoint-smoke-test/1.0'}, timeout=25))
     if err:
         record('wikimedia geo photos', False, type(err).__name__, ms, str(err)[:160])
