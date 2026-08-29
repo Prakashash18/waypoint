@@ -1,23 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { planTrip, getProviders, getVoiceStatus } from './api'
+import { planTrip, getVoiceStatus } from './api'
 import { useVoice } from './hooks/useVoice'
+import { useLocale } from './hooks/useLocale'
+import { money } from './lib/format'
+
 import VoiceButton from './components/VoiceButton'
+import TripTotal from './components/TripTotal'
+import FlightCard from './components/FlightCard'
 import HotelCard from './components/HotelCard'
-import TracePanel from './components/TracePanel'
-import SourcePanel from './components/SourcePanel'
-import ProviderPanel from './components/ProviderPanel'
+import DateWindows from './components/DateWindows'
+import KeepTalking from './components/KeepTalking'
+import HotelDetail from './components/HotelDetail'
+import BookingSheet from './components/BookingSheet'
 import Answer from './components/Answer'
+import TracePanel from './components/TracePanel'
+import { Pin, Crosshair } from './components/Icons'
 
 const EXAMPLES = [
-  '4 nights in Ubud, Bali from Kuala Lumpur, 28 Sep to 2 Oct 2026, two adults, under $900 total. Somewhere quiet with great reviews.',
-  'Cheapest decent hotel in Singapore for 2 nights from 28 Sep 2026, one adult.',
-  'Find real hotels near Ubud from OpenStreetMap and show me their actual websites.',
-]
-
-const TABS = [
-  { id: 'stay', label: 'Stays' },
-  { id: 'trace', label: 'What it did' },
-  { id: 'sources', label: 'Sources' },
+  'A few quiet nights in Bali, under $900, whenever is cheapest',
+  'Cheapest week in Bangkok next month for two',
+  'Somewhere with a pool near Ubud, great reviews',
 ]
 
 export default function App() {
@@ -25,16 +27,18 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [providers, setProviders] = useState(null)
   const [voiceReady, setVoiceReady] = useState(false)
   const [voiceOut, setVoiceOut] = useState(true)
-  const [tab, setTab] = useState('stay')
+  const [openHotel, setOpenHotel] = useState(null)
+  const [booking, setBooking] = useState(null)
+  const [showWork, setShowWork] = useState(false)
 
   const voice = useVoice({ enabled: voiceOut })
+  const { locale, origin, airports } = useLocale()
   const inputRef = useRef(null)
+  const resultsRef = useRef(null)
 
   useEffect(() => {
-    getProviders().then(setProviders).catch(() => {})
     getVoiceStatus()
       .then((v) => setVoiceReady(Boolean(v?.input?.available)))
       .catch(() => setVoiceReady(false))
@@ -45,180 +49,251 @@ export default function App() {
     if (!request || busy) return
     setBusy(true)
     setError('')
-    setResult(null)
-    setTab('stay')
     try {
-      const data = await planTrip(request)
+      const context = {
+        locale,
+        lat: locale?.lat, lon: locale?.lon, timezone: locale?.timezone,
+        origin_airport: origin?.iata,
+      }
+      const data = await planTrip(request, context)
       setResult(data)
-      // Only talk back when the traveller talked to us first.
       if (spoken && voiceOut) voice.say(spokenSummary(data))
+      requestAnimationFrame(() =>
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     } catch (e) {
       setError(e.message)
     } finally {
       setBusy(false)
     }
-  }, [brief, busy, voice, voiceOut])
+  }, [brief, busy, voice, voiceOut, locale, origin])
 
   const onTranscript = useCallback((text) => {
     setBrief(text)
     run(text, { spoken: true })
   }, [run])
 
+  const trip = result?.trip
   const hotels = result?.artifacts?.hotels || []
-  const trace = result?.trace || []
-  const counts = {
-    stay: hotels.length,
-    trace: trace.length,
-    sources: (result?.sources?.sources || []).length,
-  }
+  const alternatives = (trip?.alternatives || []).filter((h) => h.image_url || h.total_price != null)
 
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          <span className="logo" aria-hidden="true" />
-          <h1>Waypoint</h1>
-        </div>
+        <a className="brand" href="/app">
+          <span className="brand-mark"><Pin size={19} /></span>
+          <span className="serif">Waypoint</span>
+        </a>
+
         <div className="topbar-right">
+          {origin && (
+            <span className="chip origin-chip" title={origin.name}>
+              <Crosshair /> {origin.iata}
+            </span>
+          )}
           <button
             type="button"
-            className={`pill toggle ${voiceOut ? 'on' : ''}`}
+            className={`chip toggle${voiceOut ? ' is-on' : ''}`}
             onClick={() => { setVoiceOut((v) => !v); voice.stopSpeaking() }}
             aria-pressed={voiceOut}
           >
-            {voiceOut ? 'voice on' : 'voice off'}
+            {voiceOut ? 'Voice on' : 'Voice off'}
           </button>
         </div>
       </header>
 
       <main className="main">
-        <section className="ask" aria-label="Trip request">
-          <label className="sr-only" htmlFor="brief">What kind of trip?</label>
-          <textarea
-            id="brief"
-            ref={inputRef}
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run()
-            }}
-            placeholder="Ask in your own words — dates, budget, what matters to you."
-            rows={3}
-          />
-          <div className="ask-actions">
-            {voiceReady && (
-              <VoiceButton voice={voice} onTranscript={onTranscript} disabled={busy} />
-            )}
-            <button type="button" className="primary" onClick={() => run()} disabled={busy || !brief.trim()}>
-              {busy ? 'Planning…' : 'Plan trip'}
-            </button>
+        {/* ── ask ─────────────────────────────────────────── */}
+        <section className={`compose${result ? ' is-answered' : ''}`}>
+          {!result && (
+            <>
+              <p className="mono eyebrow centred">Plan a trip</p>
+              <h1 className="serif display">Where are we going?</h1>
+              <p className="lede">
+                Say it the way you would to a friend. Dates are optional — without them
+                we'll go looking for the cheapest window.
+              </p>
+              {origin && (
+                <p className="origin-line">
+                  <Crosshair /> Flying from <strong>{originLabel(origin)}</strong>
+                  {locale?.currency ? <> · prices in <strong>{locale.currency}</strong></> : null}
+                </p>
+              )}
+            </>
+          )}
+
+          {voiceReady && !result && (
+            <div className="mic-stage">
+              <VoiceButton voice={voice} onTranscript={onTranscript} disabled={busy} big />
+            </div>
+          )}
+
+          <div className="ask">
+            <textarea
+              id="brief"
+              ref={inputRef}
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+              onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run() }}
+              placeholder="A few quiet nights in Bali, under $900, whenever is cheapest…"
+              rows={result ? 2 : 3}
+              aria-label="What kind of trip?"
+            />
+            <div className="ask-actions">
+              {voiceReady && result && (
+                <VoiceButton voice={voice} onTranscript={onTranscript} disabled={busy} />
+              )}
+              <button type="button" className="btn-primary" onClick={() => run()}
+                      disabled={busy || !brief.trim()}>
+                {busy ? 'Planning…' : 'Plan trip'}
+              </button>
+            </div>
           </div>
+
+          {!result && (
+            <ul className="examples">
+              {EXAMPLES.map((ex) => (
+                <li key={ex}>
+                  <button type="button" onClick={() => { setBrief(ex); inputRef.current?.focus() }}>
+                    {ex}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
-        {(voice.error || error) && (
-          <p className="error" role="alert">{voice.error || error}</p>
+        {(voice.error || error) && <p className="error" role="alert">{voice.error || error}</p>}
+
+        {busy && !result && (
+          <p className="working"><span className="spinner" /> Asking the airlines and the hotels…</p>
         )}
 
-        <ul className="examples">
-          {EXAMPLES.map((ex) => (
-            <li key={ex}>
-              <button type="button" onClick={() => { setBrief(ex); inputRef.current?.focus() }}>
-                {ex.length > 58 ? `${ex.slice(0, 58)}…` : ex}
-              </button>
-            </li>
-          ))}
-        </ul>
+        {/* ── answer ──────────────────────────────────────── */}
+        {result && (
+          <div className="results" ref={resultsRef}>
+            <TripTotal trip={trip} />
 
-        <div className="layout">
-          <section className="card answer-card" aria-label="Recommendation">
-            <div className="card-head">
-              <h2>Recommendation</h2>
-              {result && voiceOut && (
-                <button
-                  type="button"
-                  className="pill"
-                  onClick={() => (voice.speaking ? voice.stopSpeaking() : voice.say(spokenSummary(result)))}
-                >
-                  {voice.speaking ? 'stop' : 'read aloud'}
-                </button>
+            <div className="pair">
+              {trip?.flight && (
+                <FlightCard flight={trip.flight} localeTz={locale?.timezone}
+                            onBook={() => setBooking(trip.flight)} />
+              )}
+              {trip?.hotel && (
+                <HotelCard hotel={trip.hotel} onOpen={() => setOpenHotel(trip.hotel)} />
               )}
             </div>
-            <Answer text={result?.answer} busy={busy} />
-          </section>
 
-          <div className="side">
-            <nav className="tabs" role="tablist">
-              {TABS.map((t) => (
-                <button
-                  key={t.id}
-                  role="tab"
-                  aria-selected={tab === t.id}
-                  className={tab === t.id ? 'active' : ''}
-                  onClick={() => setTab(t.id)}
-                >
-                  {t.label}
-                  {counts[t.id] > 0 && <span className="count">{counts[t.id]}</span>}
-                </button>
-              ))}
-            </nav>
+            {trip?.windows?.length > 0 && (
+              <DateWindows
+                windows={trip.windows}
+                anchor={trip.flight?.outbound?.depart?.slice(0, 10)}
+                hotelPrice={trip.hotel_price || 0}
+                onPick={(w) => run(
+                  `Use the ${w.depart}${w.return_date ? ` to ${w.return_date}` : ''} dates instead`,
+                  { spoken: false })}
+              />
+            )}
 
-            {tab === 'stay' && (
-              <div className="card" role="tabpanel">
-                <h2>Stays found</h2>
-                {hotels.length ? (
-                  <div className="hotels">
-                    {hotels.slice(0, 12).map((h) => (
-                      <HotelCard key={h.hotel_id || h.name} hotel={h} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">{busy ? 'Searching…' : 'Nothing yet.'}</p>
+            <section className="card answer-card">
+              <div className="card-head">
+                <h2>What we found</h2>
+                {voiceOut && (
+                  <button type="button" className="chip"
+                          onClick={() => (voice.speaking ? voice.stopSpeaking() : voice.say(spokenSummary(result)))}>
+                    {voice.speaking ? 'Stop' : 'Read aloud'}
+                  </button>
                 )}
               </div>
+              <Answer text={result.answer} busy={false} />
+            </section>
+
+            {alternatives.length > 0 && (
+              <section className="alts">
+                <h2 className="mono eyebrow">Other places we looked at</h2>
+                <div className="alt-grid">
+                  {alternatives.map((h) => (
+                    <HotelCard key={h.hotel_id || h.name} hotel={h} compact
+                               onOpen={() => setOpenHotel(h)} />
+                  ))}
+                </div>
+              </section>
             )}
 
-            {tab === 'trace' && (
-              <div className="card" role="tabpanel">
-                <h2>What the agent did</h2>
-                <TracePanel trace={trace} busy={busy} />
+            <details className="work" open={showWork}
+                     onToggle={(e) => setShowWork(e.currentTarget.open)}>
+              <summary>
+                How we got this — {result.tool_calls} lookups
+                {result.sources?.missing?.length ? `, ${result.sources.missing.length} gap` : ''}
+                {result.sources?.missing?.length > 1 ? 's' : ''}
+              </summary>
+              <div className="work-body">
+                <TracePanel trace={result.trace} busy={false} />
+                {result.sources?.missing?.length > 0 && (
+                  <ul className="missing">
+                    {result.sources.missing.map((m, i) => <li key={i}>{m}</li>)}
+                  </ul>
+                )}
+                {result.sources?.attributions?.length > 0 && (
+                  <p className="attribution">{result.sources.attributions.join(' · ')}</p>
+                )}
               </div>
-            )}
-
-            {tab === 'sources' && (
-              <div role="tabpanel">
-                <div className="card">
-                  <h2>Sources this run</h2>
-                  <SourcePanel sources={result?.sources} />
-                </div>
-                <div className="card">
-                  <h2>Providers configured</h2>
-                  <ProviderPanel providers={providers} />
-                </div>
-              </div>
-            )}
+            </details>
           </div>
-        </div>
+        )}
       </main>
+
+      {result && voiceReady && (
+        <footer className="dock">
+          <KeepTalking voice={voice} onAsk={(t) => { setBrief(t); run(t, { spoken: true }) }}
+                       disabled={busy} />
+        </footer>
+      )}
+
+      {openHotel && (
+        <HotelDetail hotel={openHotel} onClose={() => setOpenHotel(null)}
+                     onAsk={(t) => { setOpenHotel(null); setBrief(t); run(t, { spoken: true }) }} />
+      )}
+      {booking && (
+        <BookingSheet flight={booking} voice={voiceOut ? voice : null}
+                      onClose={() => setBooking(null)} />
+      )}
     </div>
   )
 }
 
-/** A short thing to say out loud — the written answer is far too long to read. */
+function originLabel(origin) {
+  const city = origin.city || origin.name?.replace(/ (International )?Airport.*$/i, '')
+  return `${city || origin.name} · ${origin.iata}`
+}
+
+/** Short enough to listen to; the written answer is far too long to read out. */
 function spokenSummary(result) {
-  const hotels = (result?.artifacts?.hotels || []).filter((h) => h.total_price != null)
+  const trip = result?.trip
   const missing = result?.sources?.missing || []
 
-  if (!hotels.length) {
+  if (!trip?.hotel && !trip?.flight) {
     const first = (result?.answer || '').split('\n').find((l) => l.trim())
     return first || 'I could not find anything to recommend.'
   }
 
-  const best = hotels[0]
-  const parts = [
-    `I found ${hotels.length} option${hotels.length === 1 ? '' : 's'}.`,
-    `The best value is ${best.name}, ${Math.round(best.total_price)} ${best.currency || 'dollars'} total` +
-      (best.review_score ? `, rated ${best.review_score} out of ten.` : '.'),
-  ]
+  const parts = []
+  if (trip.total != null) {
+    parts.push(`About ${money(trip.total, trip.currency, { round: true })} all in${
+      trip.passengers > 1 ? ` for ${trip.passengers}` : ''}.`)
+  }
+  if (trip.hotel) {
+    parts.push(`The stay is ${trip.hotel.name}${
+      trip.hotel.review_score ? `, rated ${trip.hotel.review_score} out of ten` : ''}.`)
+  }
+  if (trip.flight?.flight_code) {
+    parts.push(`Flying ${trip.flight.flight_code} from ${trip.flight.origin}.`)
+  }
+  const cheapest = (trip.windows || []).reduce(
+    (best, w) => (!best || w.price_total < best.price_total ? w : best), null)
+  const anchor = trip.flight?.outbound?.depart?.slice(0, 10)
+  if (cheapest && anchor && cheapest.depart !== anchor) {
+    parts.push(`Leaving on the ${Number(cheapest.depart.slice(8, 10))}th would be cheaper.`)
+  }
   if (missing.length) parts.push(`One thing I could not check: ${missing[0]}.`)
   return parts.join(' ')
 }

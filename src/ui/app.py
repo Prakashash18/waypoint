@@ -642,6 +642,7 @@ def plan_trip():
         return jsonify({
             'success': True,
             'packages': _packages_from(result),
+            'trip': _trip_from(result),
             'response': result['answer'],
             **result,
         })
@@ -664,7 +665,8 @@ def agent_plan():
             return jsonify({'success': False,
                             'error': 'request is required'}), 400
         result = _agent().plan(brief, context=data.get('context'))
-        return jsonify({'success': True, 'packages': _packages_from(result), **result})
+        return jsonify({'success': True, 'packages': _packages_from(result),
+                        'trip': _trip_from(result), **result})
     except Exception as e:
         app.logger.exception('agent plan failed')
         return jsonify({'success': False, 'error': str(e)}), 400
@@ -684,7 +686,8 @@ def agent_stream():
                                    on_step=lambda s: queue.append(s.to_dict()))
             for step in queue:
                 yield f"event: step\ndata: {json.dumps(step)}\n\n"
-            payload = {'packages': _packages_from(result), **result}
+            payload = {'packages': _packages_from(result),
+                       'trip': _trip_from(result), **result}
             yield f"event: done\ndata: {json.dumps(payload, default=str)}\n\n"
         except Exception as e:
             app.logger.exception('agent stream failed')
@@ -794,6 +797,64 @@ def _brief_from_params(data: dict) -> str:
 
     bits.append('Show a real image for each hotel you recommend.')
     return '. '.join(bits) + '.'
+
+
+def _trip_from(result: dict) -> dict:
+    """Assemble the one costed trip the UI leads with.
+
+    Pairing the cheapest flight with the best-value stay is a presentation
+    decision, so it lives here rather than being asked of the model — and the
+    total is only shown when both halves actually have a price.
+    """
+    artifacts = result.get('artifacts') or {}
+    flights = artifacts.get('flights') or []
+    hotels = artifacts.get('hotels') or []
+    locale = artifacts.get('locale') or {}
+
+    flight = min(flights, key=lambda f: f.get('price_total') or 1e9) if flights else None
+
+    # A flexible-date search returns whole offers too. Without this, asking
+    # "whenever is cheapest" produced windows but no flight to look at.
+    windows = artifacts.get('windows') or []
+    if flight is None and windows:
+        best_window = min(windows, key=lambda w: w.get('price_total') or 1e9)
+        flight = best_window.get('offer')
+    priced = [h for h in hotels if h.get('total_price') is not None]
+    hotel = min(priced, key=lambda h: h['total_price']) if priced else (hotels[0] if hotels else None)
+
+    flight_price = (flight or {}).get('price_total')
+    hotel_price = (hotel or {}).get('total_price')
+    total = None
+    if flight_price is not None and hotel_price is not None:
+        total = round(flight_price + hotel_price, 2)
+    elif hotel_price is not None:
+        total = hotel_price
+    elif flight_price is not None:
+        total = flight_price
+
+    # Currencies can differ between providers; never add across them.
+    currencies = {c for c in ((flight or {}).get('currency'), (hotel or {}).get('currency')) if c}
+    mixed = len(currencies) > 1
+    if mixed:
+        total = None
+
+    return {
+        'flight': flight,
+        'hotel': hotel,
+        'flight_price': flight_price,
+        'hotel_price': hotel_price,
+        'total': total,
+        'currency': (flight or {}).get('currency') or (hotel or {}).get('currency')
+                    or locale.get('currency') or 'USD',
+        'mixed_currency': mixed,
+        'currencies': sorted(currencies),
+        'passengers': (flight or {}).get('passengers'),
+        'nights': (hotel or {}).get('nights'),
+        'windows': windows,
+        'airports': artifacts.get('airports') or [],
+        'locale': locale or None,
+        'alternatives': [h for h in hotels if h is not hotel][:8],
+    }
 
 
 def _packages_from(result: dict) -> list:

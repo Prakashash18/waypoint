@@ -240,6 +240,7 @@ class AtlasTool(ToolBase):
                 return None
             best = min(offers, key=lambda o: o.get('price_total', 1e9))
             return {
+                'offer': best,
                 'depart': depart,
                 'return_date': back,
                 'nights': nights or None,

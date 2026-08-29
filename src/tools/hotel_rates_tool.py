@@ -306,7 +306,11 @@ class HotelRatesTool(ToolBase):
             'price_per_night': round(total / nights, 2) if isinstance(total, (int, float)) and nights else None,
             'taxes_excluded': round(excluded, 2) if isinstance(excluded, (int, float)) else None,
             'currency': currency,
+            # Both ends of each window: '00:00' as an until-time means
+            # midnight, not the hour you may arrive.
             'checkin_from': (prop.get('checkin') or {}).get('fromTime', ''),
+            'checkin_until': (prop.get('checkin') or {}).get('untilTime', ''),
+            'checkout_from': (prop.get('checkout') or {}).get('fromTime', ''),
             'checkout_until': (prop.get('checkout') or {}).get('untilTime', ''),
             'image_url': photos[0] if photos else None,
             'photos': photos[:6],

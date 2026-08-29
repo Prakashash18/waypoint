@@ -1,66 +1,67 @@
-/** One hotel. Shows a real image or explains why there is none, and never
- *  shows a price the providers did not return. */
-export default function HotelCard({ hotel }) {
-  const prov = hotel.provenance || {}
-  const hasPrice = hotel.total_price != null
+import { money } from '../lib/format'
+import { External } from './Icons'
 
-  const imageBadge = {
-    provider_photo: ['real photo', 'ok'],
-    website: ['live screenshot', 'shot'],
-    map: ['map of location', 'shot'],
-    photo: ['geotagged photo', 'shot'],
+/** A stay. Books at the source, because we never hold the room. */
+export default function HotelCard({ hotel, onOpen, compact = false }) {
+  if (!hotel) return null
+  const priced = hotel.total_price != null
+
+  const imageLabel = {
+    provider_photo: 'real photo',
+    website: 'live screenshot',
+    map: 'map of the location',
+    photo: 'geotagged photo',
   }[hotel.image_source]
 
   return (
-    <article className="hotel">
-      <div className="hotel-media">
+    <article className={`card hotel-card${compact ? ' is-compact' : ''}`}>
+      <button type="button" className="hotel-media" onClick={onOpen}
+              aria-label={`More about ${hotel.name}`}>
         {hotel.image_url ? (
           <img src={hotel.image_url} alt={hotel.name} loading="lazy" decoding="async" />
         ) : (
-          <p className="hotel-noimage">
-            {hotel.image_note || 'No authentic image available. None was invented.'}
-          </p>
+          <p className="no-image">{hotel.image_note || 'No photograph of this place was available.'}</p>
         )}
-      </div>
+        {imageLabel && <span className="mono media-tag">{imageLabel}</span>}
+      </button>
 
       <div className="hotel-body">
-        <h3 className="hotel-name">{hotel.name}</h3>
+        <div className="hotel-head">
+          <h3 className="serif">{hotel.name}</h3>
+          {hotel.review_score != null && (
+            <p className="score">
+              <strong>{hotel.review_score}</strong>
+              {hotel.review_count ? <span>{hotel.review_count} reviews</span> : null}
+            </p>
+          )}
+        </div>
 
-        <p className="hotel-meta">
-          {hotel.stars ? <span>{hotel.stars}★</span> : null}
-          {hotel.review_score ? (
-            <span>
-              {hotel.review_score}/10
-              {hotel.review_count ? ` · ${hotel.review_count} reviews` : ''}
-            </span>
-          ) : null}
-          {hotel.area ? <span>{hotel.area}</span> : null}
-          {hotel.distance_km != null ? <span>{hotel.distance_km} km from centre</span> : null}
-        </p>
+        {(hotel.area || hotel.address) && (
+          <p className="hotel-where">{hotel.area || hotel.address}</p>
+        )}
 
-        {hasPrice ? (
+        {priced ? (
           <p className="hotel-price">
-            {hotel.currency || 'USD'} {Math.round(hotel.total_price)}
-            <span className="hotel-price-unit">
-              total{hotel.nights ? ` · ${hotel.nights} nights` : ''}
+            <strong>{money(hotel.total_price, hotel.currency)}</strong>
+            <span>
+              {hotel.nights ? `${hotel.nights} nights` : 'total'}
+              {hotel.price_per_night ? ` · ${money(hotel.price_per_night, hotel.currency)} a night` : ''}
             </span>
           </p>
         ) : (
-          <p className="hotel-noprice">Price not available from any configured source</p>
+          <p className="no-price">No rate available for this one</p>
         )}
-
-        <ul className="badges">
-          <li className={`badge ${prov.status === 'live' ? 'ok' : prov.status === 'cached' ? 'info' : ''}`}>
-            {prov.label || hotel.source || 'unknown source'}
-          </li>
-          {imageBadge && <li className={`badge ${imageBadge[1]}`}>{imageBadge[0]}</li>}
-          {hotel.website && (
-            <li className="badge">
-              <a href={hotel.website} target="_blank" rel="noreferrer noopener">official site</a>
-            </li>
-          )}
-        </ul>
       </div>
+
+      {!compact && (
+        <footer className="card-foot">
+          <a className="btn-secondary" href={hotel.booking_url || hotel.website || '#'}
+             target="_blank" rel="noreferrer noopener">
+            Book on {hotel.source === 'osm' ? 'their site' : 'Booking.com'} <External />
+          </a>
+          <p className="fine">Rooms are held and paid for on their site, not here</p>
+        </footer>
+      )}
     </article>
   )
 }

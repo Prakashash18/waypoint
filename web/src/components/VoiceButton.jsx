@@ -1,5 +1,7 @@
-/** Push-to-talk control. Hold to speak, release to send. */
-export default function VoiceButton({ voice, onTranscript, disabled }) {
+import { Mic } from './Icons'
+
+/** Push-to-talk. Hold to speak, release to send. */
+export default function VoiceButton({ voice, onTranscript, disabled, compact = false, big = false }) {
   const { recording, thinking, level, start, stopAndTranscribe } = voice
 
   async function begin(e) {
@@ -15,13 +17,15 @@ export default function VoiceButton({ voice, onTranscript, disabled }) {
     if (text) onTranscript(text)
   }
 
-  const label = thinking ? 'Transcribing' : recording ? 'Listening — release to send' : 'Hold to speak'
+  const label = thinking ? 'Transcribing…'
+    : recording ? 'Listening — release to send'
+    : 'Hold to speak'
 
-  return (
+  const button = (
     <button
       type="button"
-      className={`mic ${recording ? 'is-recording' : ''} ${thinking ? 'is-thinking' : ''}`}
-      // Pointer events cover mouse, touch and pen with one path.
+      className={`mic${big ? ' is-big' : ''}${compact ? ' is-compact' : ''}` +
+                 `${recording ? ' is-recording' : ''}${thinking ? ' is-thinking' : ''}`}
       onPointerDown={begin}
       onPointerUp={end}
       onPointerLeave={end}
@@ -32,22 +36,16 @@ export default function VoiceButton({ voice, onTranscript, disabled }) {
       style={{ '--level': recording ? level : 0 }}
     >
       <span className="mic-ring" aria-hidden="true" />
-      {thinking ? <Spinner /> : <MicIcon />}
-      <span className="mic-label">{label}</span>
+      <span className="mic-ring is-outer" aria-hidden="true" />
+      <span className="mic-face">{thinking ? <span className="spinner" /> : <Mic size={big ? 38 : 20} />}</span>
+      {!compact && !big && <span className="mic-label">{label}</span>}
     </button>
   )
-}
 
-function MicIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-         strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <rect x="9" y="2" width="6" height="12" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0M12 18v4" />
-    </svg>
-  )
-}
-
-function Spinner() {
-  return <span className="spinner" aria-hidden="true" />
+  return big ? (
+    <span className="mic-stack">
+      {button}
+      <span className="mic-caption">{label}</span>
+    </span>
+  ) : button
 }
