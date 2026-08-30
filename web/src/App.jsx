@@ -235,8 +235,19 @@ export default function App() {
               ref={inputRef}
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
-              onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run() }}
-              placeholder="A few quiet nights in Bali, under $900, whenever is cheapest…"
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                // In conversation this is a chat box: Enter sends, Shift+Enter
+                // starts a new line. Before that, only the deliberate
+                // Cmd/Ctrl+Enter submits, so a long brief can be typed freely.
+                if (conversing ? !e.shiftKey : (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault()
+                  run()
+                }
+              }}
+              placeholder={conversing
+                ? 'Ask anything — “somewhere quieter?”, “what about the 26th?”'
+                : 'A few quiet nights in Bali, under $900, whenever is cheapest…'}
               rows={conversing ? 2 : 3}
               aria-label="What kind of trip?"
             />
@@ -252,7 +263,7 @@ export default function App() {
               ) : (
                 <button type="button" className="btn-primary" onClick={() => run()}
                         disabled={!brief.trim()}>
-                  Plan trip
+                  {conversing ? 'Enter' : 'Plan trip'}
                 </button>
               )}
             </div>
