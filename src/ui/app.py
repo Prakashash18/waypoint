@@ -1129,6 +1129,11 @@ def _best_flight(artifacts: dict) -> dict:
     return from_flights or from_windows or {}
 
 
+# Below this, a movement is noise: "SGD 323 → SGD 323, costs SGD 0" is a card
+# that tells a traveller nothing and hides the flight card behind it.
+MIN_PRICE_MOVE = 1.0
+
+
 def _cards_from(result: dict, before: dict) -> list:
     """Structured cards for a reply, so an answer is not only prose.
 
@@ -1146,7 +1151,7 @@ def _cards_from(result: dict, before: dict) -> list:
 
     was = before.get('flight_price')
     now = (now_flight or {}).get('price_total')
-    if was is not None and now is not None and abs(now - was) > 0.01:
+    if was is not None and now is not None and abs(now - was) >= MIN_PRICE_MOVE:
         cards.append({
             'kind': 'price_change',
             'title': 'Flights',
@@ -1163,7 +1168,7 @@ def _cards_from(result: dict, before: dict) -> list:
     for hotel in hotels:
         hid, price = hotel.get('hotel_id'), hotel.get('total_price')
         prev = before.get('hotels', {}).get(hid)
-        if prev is not None and price is not None and abs(price - prev) > 0.01:
+        if prev is not None and price is not None and abs(price - prev) >= MIN_PRICE_MOVE:
             cards.append({
                 'kind': 'price_change',
                 'title': hotel.get('name', 'Stay'),

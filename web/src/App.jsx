@@ -373,6 +373,15 @@ export default function App() {
         {/* ── answer ──────────────────────────────────────── */}
         {result && (
           <div className="results" ref={resultsRef}>
+            {stage === 'choose' && combos.length === 0 && trip?.flight && (
+              <div className="step-head">
+                <p className="mono eyebrow">Flights only — no stay priced yet</p>
+                <p className="step-note">
+                  Ask for somewhere to stay and these become whole trips you can compare.
+                </p>
+              </div>
+            )}
+
             {/* Step 1 — which trip? Nothing else competes with the question. */}
             {stage === 'choose' && combos.length > 0 && (
               <>
@@ -422,7 +431,10 @@ export default function App() {
             {/* Step 3 — the conversation, with the trip out of the way. */}
             {stage === 'ask' && chosen && <TripStrip combo={repriced(chosen)} onBack={stepBack} />}
 
-            {(stage === 'ask' || messages.length > 2) && (
+            {/* Without combinations there is no step 1 to draw, so the answer
+                and its cards would have nowhere to go — a flights-only reply
+                rendered an empty page with the answer buried in the trace. */}
+            {(stage === 'ask' || messages.length > 2 || combos.length === 0) && (
               <ChatThread messages={messages} busy={busy} onAsk={ask}
                           onBookFlight={() => { if (trip?.flight) setBooking(trip.flight) }}
                           onOpenStay={(card) => {
