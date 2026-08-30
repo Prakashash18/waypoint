@@ -81,7 +81,12 @@ export default function Settings({ onClose }) {
               <ul className="srclist">
                 <li><span>Saved responses</span><span>{cache.cached_responses}</span></li>
                 <li><span>Oldest</span><span>{cache.oldest_hours} h</span></li>
-                <li><span>Prices re-fetched after</span><span>{cache.rate_ttl_hours} h</span></li>
+                <li>
+                  <span>Prices</span>
+                  <span>{cache.prices_live
+                    ? 'fetched live, every search'
+                    : `re-fetched after ${cache.rate_ttl_hours} h`}</span>
+                </li>
               </ul>
 
               <div className="sheet-actions">

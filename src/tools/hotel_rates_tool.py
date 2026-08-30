@@ -39,14 +39,20 @@ BASE = f'https://{RAPIDAPI_HOST}/api/v1'
 CACHE_DIR = os.getenv(
     'WAYPOINT_CACHE_DIR',
     os.path.join(os.path.dirname(__file__), '..', '..', '.cache', 'hotel_rates'))
-# The free RapidAPI tier is metered and small, so cache lifetimes are set per
-# endpoint by how fast the answer actually changes — a city's id never moves,
-# a hotel's photographs rarely do, and nightly rates drift slowly enough that a
-# day is fine for planning.
-CACHE_TTL = int(os.getenv('WAYPOINT_RATE_CACHE_TTL', 24 * 3600))
+# Cache lifetimes are set per endpoint by how fast the answer actually changes.
+# A city's id never moves and a hotel's photographs rarely do, so those are held
+# for weeks and cost almost nothing to reuse.
+#
+# PRICES ARE NOT CACHED. A day-old nightly rate reads as a current one on the
+# card, and a traveller cannot tell the difference — a stale price is worse than
+# a slower search. Every quoted rate is fetched live; the saved copy is kept
+# only as the clearly-labelled STALE fallback for when the plan's quota runs
+# out. Set WAYPOINT_RATE_CACHE_TTL to trade freshness back for quota.
+CACHE_TTL = int(os.getenv('WAYPOINT_RATE_CACHE_TTL', 0))
 ENDPOINT_TTL = {
     '/hotels/searchDestination': int(os.getenv('WAYPOINT_DEST_CACHE_TTL', 30 * 86400)),
     '/hotels/getHotelPhotos': int(os.getenv('WAYPOINT_PHOTO_CACHE_TTL', 7 * 86400)),
+    '/hotels/searchHotels': int(os.getenv('WAYPOINT_RATE_CACHE_TTL', 0)),
 }
 
 # RapidAPI reports the real allowance on every response, and for the BASIC
@@ -299,6 +305,7 @@ class HotelRatesTool(ToolBase):
             'calls_left_today': self.budget_left(),
             'history': self._ledger(),
             'rate_ttl_hours': round(CACHE_TTL / 3600, 1),
+            'prices_live': CACHE_TTL <= 0,
         }
 
     def recheck_quota(self) -> Dict[str, Any]:
@@ -334,7 +341,7 @@ class HotelRatesTool(ToolBase):
         cached, age_s = self._read_cache(cache_file)
         ttl = self._ttl_for(path)
 
-        if cached is not None and age_s < ttl:
+        if cached is not None and ttl > 0 and age_s < ttl:
             return cached, Provenance(
                 'booking_rapidapi', SourceStatus.CACHED, url=url,
                 attribution=ATTRIBUTION,
