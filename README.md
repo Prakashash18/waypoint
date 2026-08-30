@@ -1,8 +1,37 @@
-# Waypoint — Disruption Rebooking Agent
+# Waypoint — a travel agent that books, and won't invent
 
-A trust-first rebooking agent for stranded air travelers. When a flight is cancelled, Waypoint finds replacement options across Atlas's low-cost carrier network, reasons about tradeoffs, and drives a real booking to ticket issuance — pausing at every checkpoint where money or an irreversible choice is involved.
+A voice-first agentic travel planner. You describe a trip in one sentence and it
+plans the whole thing — flights and stay priced together — then books it for
+real: the fare re-verified with the airline, baggage priced per traveller per
+leg, and an order created that holds actual seats.
 
-**Thesis**: Agentic commerce fails on trust, not capability. Every pause is a product feature, not a limitation.
+It stops deliberately at payment. Everything up to that point is automated;
+moving your money is not.
+
+**The other half of the thesis is that it refuses to make things up.** Every
+price, photograph and place carries the source it came from. When a provider
+has nothing to say, the app says so rather than filling the gap — no stock
+photography standing in for a hotel, no invented fare, no guessed link.
+
+## Status
+
+| | |
+|---|---|
+| **Running** | Locally, for testing — `venv/bin/python run.py`, then http://localhost:2000 |
+| **Planned** | Alibaba Cloud ECS, Singapore region (`ap-southeast-1`) |
+
+### TODO
+
+- [ ] **Deploy to Alibaba Cloud.** ECS in **Singapore**, not a mainland region:
+      the app calls OpenAI, ElevenLabs and RapidAPI on nearly every request, and
+      those are unreachable or unreliable from mainland regions. Singapore also
+      avoids the ICP filing a mainland-hosted domain requires.
+- [ ] Behind a proxy, set `proxy_buffering off` — the agent streams its progress
+      over SSE, and a buffering proxy makes it arrive in one silent lump.
+- [ ] Surface the Atlas account states (`TOP_UP_REQUIRED`,
+      `TICKETING_ACTIVATION_REQUIRED`) in the UI; today a lapsed balance
+      surfaces as a generic failure.
+- [ ] Show voice input in the demo — it works, but it has never been recorded.
 
 ## Architecture
 
@@ -118,7 +147,7 @@ Without the API key, the system uses template-based reasoning.
 python3.12 run.py
 ```
 
-The UI will be available at http://localhost:5000
+The UI will be available at http://localhost:2000
 
 ### End-to-End Flow
 
@@ -259,32 +288,39 @@ python3.12 -m pytest tests/ --cov=src
 
 ### Docker
 
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE 5000
-CMD ["python3.12", "run.py"]
-```
-
-### Alibaba Cloud ECS
+The real `Dockerfile` at the repository root builds the UI with Node, installs
+Playwright's Chromium for the hotel screenshots, and serves through gunicorn on
+`$PORT` (8000 by default).
 
 ```bash
-# Build and push to registry
-docker build -t waypoint:latest .
-docker tag waypoint:latest registry.cn-hangzhou.aliyuncs.com/waypoint/waypoint:latest
-docker push registry.cn-hangzhou.aliyuncs.com/waypoint/waypoint:latest
-
-# Deploy on ECS
-docker run -d -p 80:5000 \
-  -e DASHSCOPE_API_KEY="$DASHSCOPE_API_KEY" \
-  registry.cn-hangzhou.aliyuncs.com/waypoint/waypoint:latest
+docker build -t waypoint .
+docker run -p 8000:8000 --env-file .env waypoint
 ```
+
+### Alibaba Cloud ECS (planned)
+
+Use a **Singapore** region. The app depends on OpenAI, ElevenLabs and RapidAPI
+for nearly every request, and those are blocked or unreliable from mainland
+regions — the app would degrade to "source unavailable" on almost every card,
+which is the one failure mode it exists to prevent. Singapore also avoids the
+ICP filing that a domain pointed at mainland servers requires.
+
+```bash
+# Build and push to a Singapore registry
+docker build -t waypoint:latest .
+docker tag waypoint:latest registry.ap-southeast-1.aliyuncs.com/<ns>/waypoint:latest
+docker push registry.ap-southeast-1.aliyuncs.com/<ns>/waypoint:latest
+
+# Run it. Chromium peaks around 450MB, so give the instance 2GB if you can.
+docker run -d -p 80:8000 \
+  -e OPENAI_API_KEY -e RAPIDAPI_KEY -e ELEVENLABS_API_KEY \
+  -e ATLAS_KEYRING_B64 \
+  registry.ap-southeast-1.aliyuncs.com/<ns>/waypoint:latest
+```
+
+Atlas keeps its credentials in an OS keyring, which a container does not have;
+`scripts/export-atlas-credential.sh` packages one into `ATLAS_KEYRING_B64` for
+the entrypoint to restore.
 
 ## Development Notes
 

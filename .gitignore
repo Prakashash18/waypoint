@@ -12,3 +12,13 @@ src/ui/agent-app/
 # Recording intermediates; the finished cut and its sources are tracked.
 demo/video/*.webm
 demo/video/marks.json
+
+# Demo artefacts — regenerate with scripts/ rather than carrying them in git.
+# The recording, its narration and the specimen passports are all reproducible,
+# and together they were 54MB of a repository that is otherwise text.
+demo/video/
+demo/audio/
+demo/passports/
+demo/intro/intro.png
+demo/intro/intro.html
+demo/overlays/
