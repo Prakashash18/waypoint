@@ -34,19 +34,28 @@ const SHOW_PARAMS = ['origin', 'destination', 'place', 'query', 'name', 'around'
 const stroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7,
                  strokeLinecap: 'round', strokeLinejoin: 'round' }
 
-function Glyph({ kind, size = 15 }) {
+/** A glyph per stage, which moves only while that stage is the live one.
+ *
+ *  Motion here is a status readout, not decoration: if something is moving,
+ *  that call is in flight right now. Finished steps hold still, so a glance
+ *  down the list tells you where the agent is. Each animation mimes the work
+ *  actually being done — the pin drops and rings out over the map, the shutter
+ *  blinks while photographs are collected, dates fill in one at a time.
+ */
+function Glyph({ kind, size = 15, live = false }) {
   const paths = {
-    plane: <path d="M17.8 19.2 16 11l3.5-3.5a2.1 2.1 0 0 0-3-3L13 8 4.8 6.2a.6.6 0 0 0-.6.9l3 4.5-2.4 2.4-2-.4a.6.6 0 0 0-.5 1l2 2 2 2a.6.6 0 0 0 1-.5l-.4-2 2.4-2.4 4.5 3a.6.6 0 0 0 .9-.6z" />,
-    bed: <><path d="M3 18v-8h13a4 4 0 0 1 4 4v4" /><path d="M3 14h17M3 18h18" /><circle cx="7.5" cy="12.5" r="1.6" /></>,
-    pin: <><path d="M12 21s6-5.4 6-9.8A6 6 0 0 0 6 11.2C6 15.6 12 21 12 21z" /><circle cx="12" cy="11" r="2" /></>,
-    tower: <><path d="M12 3v18M8 21h8" /><path d="M6 9l12-3M6 6l12 3" /></>,
-    camera: <><path d="M3 8h3l1.5-2h9L18 8h3v11H3z" /><circle cx="12" cy="13" r="3.4" /></>,
-    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
-    link: <><path d="M10 13a4 4 0 0 0 5.7 0l2.6-2.6a4 4 0 0 0-5.7-5.7L11 6.4" /><path d="M14 11a4 4 0 0 0-5.7 0l-2.6 2.6a4 4 0 0 0 5.7 5.7L13 17.6" /></>,
-    book: <><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M8 7h7M8 11h7" /></>,
+    plane: <g className="g-plane"><path d="M17.8 19.2 16 11l3.5-3.5a2.1 2.1 0 0 0-3-3L13 8 4.8 6.2a.6.6 0 0 0-.6.9l3 4.5-2.4 2.4-2-.4a.6.6 0 0 0-.5 1l2 2 2 2a.6.6 0 0 0 1-.5l-.4-2 2.4-2.4 4.5 3a.6.6 0 0 0 .9-.6z" /></g>,
+    bed: <><path d="M3 18v-8h13a4 4 0 0 1 4 4v4" /><path d="M3 14h17M3 18h18" /><circle className="g-pillow" cx="7.5" cy="12.5" r="1.6" /></>,
+    pin: <><g className="g-pin"><path d="M12 21s6-5.4 6-9.8A6 6 0 0 0 6 11.2C6 15.6 12 21 12 21z" /><circle cx="12" cy="11" r="2" /></g><circle className="g-ripple" cx="12" cy="21" r="3" /></>,
+    tower: <><path d="M12 3v18M8 21h8" /><path className="g-wave a" d="M6 9l12-3" /><path className="g-wave b" d="M6 6l12 3" /></>,
+    camera: <><path d="M3 8h3l1.5-2h9L18 8h3v11H3z" /><circle className="g-shutter" cx="12" cy="13" r="3.4" /></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /><g className="g-cells"><rect className="a" x="6" y="12.5" width="3" height="2.6" rx="0.6" /><rect className="b" x="10.5" y="12.5" width="3" height="2.6" rx="0.6" /><rect className="c" x="15" y="12.5" width="3" height="2.6" rx="0.6" /></g></>,
+    link: <><path className="g-chain a" d="M10 13a4 4 0 0 0 5.7 0l2.6-2.6a4 4 0 0 0-5.7-5.7L11 6.4" /><path className="g-chain b" d="M14 11a4 4 0 0 0-5.7 0l-2.6 2.6a4 4 0 0 0 5.7 5.7L13 17.6" /></>,
+    book: <><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path className="g-line a" d="M8 7h7" /><path className="g-line b" d="M8 11h7" /></>,
   }
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} {...stroke} aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size} {...stroke} aria-hidden="true"
+         className={`glyph is-${kind}${live ? ' is-live' : ''}`}>
       {paths[kind] || paths.pin}
     </svg>
   )
@@ -104,7 +113,7 @@ export default function AgentHUD({ steps, done, stopping = false }) {
 
           return (
             <li key={`${key}-${i}`} className={`hud-step${live ? ' is-live' : ''}${bad ? ' is-empty' : ''}`}>
-              <span className="hud-glyph"><Glyph kind={glyph} /></span>
+              <span className="hud-glyph"><Glyph kind={glyph} live={live} /></span>
               <div className="hud-detail">
                 <p className="hud-line-1">
                   <span className="hud-label">{label}</span>

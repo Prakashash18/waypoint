@@ -1106,3 +1106,106 @@ img { max-width: 100%; }
 
 .badlist { margin: 8px 0 4px; padding-left: 20px; }
 .badlist li { margin-bottom: 3px; }
+
+/* ── stage animation ──────────────────────────────────────────────
+   Motion is a status readout, not decoration. A glyph moves only while
+   its call is in flight, so a glance down the list finds the live step
+   without reading a word. Each one mimes the work it stands for.
+
+   Everything here is vector and costs a couple of kilobytes. It also
+   loops cleanly for an unknown duration, which a video cannot do, and
+   holds still the moment the step completes.                        */
+
+.glyph { overflow: visible; }
+
+/* Flying — a slow climb and bank, not a loop-the-loop. */
+@keyframes g-fly {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(1px, -1.6px) rotate(-6deg); }
+}
+.glyph.is-live .g-plane { animation: g-fly 2.4s ease-in-out infinite;
+                          transform-origin: 12px 12px; }
+
+/* A pin dropping onto the map, and the ring it sends out. */
+@keyframes g-drop {
+  0%       { transform: translateY(-4px); opacity: .35; }
+  35%, 100%{ transform: translateY(0);    opacity: 1; }
+}
+@keyframes g-ring {
+  0%, 30% { r: 1; opacity: 0; }
+  55%     { opacity: .55; }
+  100%    { r: 7; opacity: 0; }
+}
+.glyph.is-live .g-pin    { animation: g-drop 2s cubic-bezier(.3, 1.4, .5, 1) infinite; }
+.glyph.is-live .g-ripple { animation: g-ring 2s ease-out infinite; fill: none; }
+.glyph .g-ripple         { opacity: 0; }
+
+/* A pillow settling as the bed is made. */
+@keyframes g-settle {
+  0%, 100% { transform: translateY(0)      scale(1); }
+  45%      { transform: translateY(-1.2px) scale(1.12); }
+}
+.glyph.is-live .g-pillow { animation: g-settle 1.9s ease-in-out infinite;
+                           transform-origin: 7.5px 12.5px; }
+
+/* Radar sweeping off the tower. */
+@keyframes g-sweep { 0% { opacity: .15; } 50% { opacity: 1; } 100% { opacity: .15; } }
+.glyph.is-live .g-wave   { animation: g-sweep 1.6s ease-in-out infinite; }
+.glyph.is-live .g-wave.b { animation-delay: .35s; }
+
+/* A shutter opening and closing. */
+@keyframes g-blink {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  48%      { transform: scale(.42); opacity: .65; }
+}
+.glyph.is-live .g-shutter { animation: g-blink 1.8s cubic-bezier(.5, 0, .3, 1) infinite;
+                            transform-origin: 12px 13px; }
+
+/* Dates filling in, one after another. */
+@keyframes g-fill { 0%, 70%, 100% { opacity: .12; } 20%, 50% { opacity: .95; } }
+.glyph .g-cells rect          { fill: currentColor; stroke: none; opacity: .12; }
+.glyph.is-live .g-cells .a    { animation: g-fill 2.1s ease-in-out infinite; }
+.glyph.is-live .g-cells .b    { animation: g-fill 2.1s ease-in-out infinite .25s; }
+.glyph.is-live .g-cells .c    { animation: g-fill 2.1s ease-in-out infinite .5s; }
+
+/* A chain drawing itself link by link, as a trail is followed. */
+@keyframes g-draw {
+  0%   { stroke-dashoffset: 22; }
+  55%  { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; opacity: .35; }
+}
+.glyph.is-live .g-chain   { stroke-dasharray: 22; animation: g-draw 2s ease-in-out infinite; }
+.glyph.is-live .g-chain.b { animation-delay: .3s; }
+
+/* Lines of text being read down a page. */
+@keyframes g-read { 0%, 100% { opacity: .2; } 40% { opacity: 1; } }
+.glyph.is-live .g-line   { animation: g-read 1.8s ease-in-out infinite; }
+.glyph.is-live .g-line.b { animation-delay: .3s; }
+
+/* The plane on the route bobs while it is still moving, and settles when done. */
+@keyframes hud-bob { 0%, 100% { transform: translate(-50%, -50%); }
+                     50%      { transform: translate(-50%, calc(-50% - 1.5px)); } }
+.hud[aria-busy="true"] .hud-plane { animation: hud-bob 2.2s ease-in-out infinite; }
+
+/* Light travelling along the trail already covered. */
+@keyframes hud-shimmer { 0% { background-position: -140% 0; } 100% { background-position: 240% 0; } }
+.hud[aria-busy="true"] .hud-trail::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--paper), transparent);
+  background-size: 60% 100%; background-repeat: no-repeat; opacity: .5;
+  animation: hud-shimmer 2.6s linear infinite;
+}
+.hud-trail { position: relative; overflow: hidden; }
+
+/* Motion is never the only signal: every state above is also carried by text
+   and by the live/done classes, so switching it off loses nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .glyph.is-live .g-plane, .glyph.is-live .g-pin, .glyph.is-live .g-ripple,
+  .glyph.is-live .g-pillow, .glyph.is-live .g-wave, .glyph.is-live .g-shutter,
+  .glyph.is-live .g-cells rect, .glyph.is-live .g-chain, .glyph.is-live .g-line,
+  .hud[aria-busy="true"] .hud-plane, .hud[aria-busy="true"] .hud-trail::after {
+    animation: none;
+  }
+  .glyph.is-live .g-cells rect { opacity: .6; }
+  .glyph.is-live .g-chain      { stroke-dashoffset: 0; }
+}
