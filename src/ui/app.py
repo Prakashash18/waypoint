@@ -993,6 +993,91 @@ def booking_order():
         return jsonify({'success': False, 'error': str(exc)}), 200
 
 
+@app.route('/api/booking/scan-passport', methods=['POST'])
+def scan_passport():
+    """Read a passport photo's machine-readable zone into booking fields.
+
+    Only the MRZ — the two monospaced lines at the bottom of the photo page —
+    is transcribed, and only as characters. Every field it yields carries an
+    ICAO check digit, which is verified here, in this process: a misread digit
+    is reported as a failed field rather than quietly written into a ticket.
+
+    The image is held in memory for the length of this request and never
+    written to disk, logged, or kept. It is sent to the vision model to be
+    transcribed and nothing else; the browser is told this before it uploads.
+    """
+    import base64
+    from src.tools.mrz import parse as parse_mrz
+
+    upload = request.files.get('image')
+    if upload is None:
+        return jsonify({'success': False, 'error': 'No image was uploaded.'}), 400
+
+    blob = upload.read(MAX_PASSPORT_BYTES + 1)
+    if not blob:
+        return jsonify({'success': False, 'error': 'That file was empty.'}), 400
+    if len(blob) > MAX_PASSPORT_BYTES:
+        return jsonify({'success': False,
+                        'error': f'Image is over {MAX_PASSPORT_BYTES // (1024 * 1024)}MB. '
+                                 'A photo of just the bottom of the page is plenty.'}), 400
+
+    mime = upload.mimetype or 'image/jpeg'
+    if not mime.startswith('image/'):
+        return jsonify({'success': False, 'error': 'That is not an image.'}), 400
+
+    if not os.getenv('OPENAI_API_KEY'):
+        return jsonify({'success': False,
+                        'error': 'Reading a passport needs OPENAI_API_KEY set. '
+                                 'You can still type the details in.'}), 200
+
+    try:
+        import openai
+        client = openai.OpenAI()
+        answer = client.chat.completions.create(
+            model='gpt-4o',
+            temperature=0,
+            max_tokens=120,
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {'type': 'text', 'text': (
+                        'This is a passport or travel document. Find the machine-readable '
+                        'zone: the two or three lines of monospaced characters at the very '
+                        'bottom, made of A-Z, 0-9 and the filler character <.\n\n'
+                        'Transcribe those lines EXACTLY as printed, one per output line, '
+                        'preserving every < and every character position. Do not correct '
+                        'anything, do not translate, do not add spaces, and do not output '
+                        'anything except the lines themselves.\n\n'
+                        'If you cannot see a machine-readable zone, reply with exactly: NONE')},
+                    {'type': 'image_url', 'image_url': {
+                        'url': f'data:{mime};base64,{base64.b64encode(blob).decode()}',
+                        'detail': 'high'}},
+                ],
+            }],
+        )
+        text = (answer.choices[0].message.content or '').strip()
+    except Exception as exc:
+        app.logger.exception('passport scan failed')
+        return jsonify({'success': False,
+                        'error': f'Could not read the image: {exc}'}), 200
+    finally:
+        # Nothing about this image outlives the request.
+        del blob
+
+    if not text or text.upper().startswith('NONE'):
+        return jsonify({'success': False, 'found': False,
+                        'error': 'No machine-readable zone found. Photograph the bottom '
+                                 'two lines of the photo page, straight on and in focus.'}), 200
+
+    result = parse_mrz([ln for ln in text.splitlines() if ln.strip()])
+    payload = result.to_dict()
+    payload['success'] = True
+    payload['found'] = True
+    # The transcription itself is never returned or logged — it is the document
+    # number in plain text. Only the parsed fields go back.
+    return jsonify(payload)
+
+
 @app.route('/api/sources', methods=['GET'])
 def list_sources():
     """Which data providers are configured, so the UI can be honest up front."""
@@ -1237,6 +1322,8 @@ def _best_flight(artifacts: dict) -> dict:
 # Below this, a movement is noise: "SGD 323 → SGD 323, costs SGD 0" is a card
 # that tells a traveller nothing and hides the flight card behind it.
 MIN_PRICE_MOVE = 1.0
+# A phone photo of a passport page; anything larger is a scan we do not need.
+MAX_PASSPORT_BYTES = int(os.getenv('WAYPOINT_MAX_PASSPORT_BYTES', 8 * 1024 * 1024))
 
 
 def _cards_from(result: dict, before: dict) -> list:

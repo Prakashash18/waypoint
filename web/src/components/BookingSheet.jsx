@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { money, clockTime, shortDate, duration } from '../lib/format'
 import { Close, Mic } from './Icons'
+import PassportDrop from './PassportDrop'
 
 /** Confirming a flight, by voice or by keyboard.
  *
@@ -19,7 +20,8 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const YES = /\b(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|book it|confirm|please do)\b/i
 const NO = /\b(no|nope|not yet|cancel|stop|wait|don'?t|hold on)\b/i
 
-const blankPassenger = () => ({ name: '', gender: '', birthday: '' })
+const blankPassenger = () => ({ name: '', gender: '', birthday: '',
+                                nationality: '', document: null })
 
 export default function BookingSheet({ flight, onClose, voice }) {
   const [spoken, setSpoken] = useState(false)
@@ -44,6 +46,7 @@ export default function BookingSheet({ flight, onClose, voice }) {
   const [placing, setPlacing] = useState(false)
   const [order, setOrder] = useState(null)
   const [failed, setFailed] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!flight?.offer_id) return undefined
@@ -183,6 +186,9 @@ export default function BookingSheet({ flight, onClose, voice }) {
             passenger_type: 'adult',
             gender: p.gender,
             birthday: p.birthday,
+            // Only sent when a passport actually supplied them.
+            ...(p.nationality ? { nationality: p.nationality } : {}),
+            ...(p.document?.number ? { document: p.document } : {}),
           })),
           contact: {
             name: contact.name.trim().toUpperCase(),
@@ -207,10 +213,33 @@ export default function BookingSheet({ flight, onClose, voice }) {
     }
   }, [localProblems, prep, people, contact, travellers, voice])
 
+  const deadline = order?.payment_deadline ? new Date(order.payment_deadline) : null
+  const overdue = deadline ? deadline.getTime() < Date.now() : false
+
   if (!flight) return null
 
   const legs = [flight.outbound, flight.return_leg].filter(Boolean)
   const marks = (f) => (badFields.includes(f) ? ' is-bad' : '')
+
+  // Turn Atlas's field paths into something a traveller can act on, and single
+  // out the ones with no input to correct.
+  const FIELD_WORDS = {
+    name: 'the name, as FAMILY/GIVEN',
+    gender: 'the gender',
+    birthday: 'the date of birth',
+    'document.expires': 'the passport expiry — this document has expired',
+    'document.number': 'the passport number',
+    'document.issuing_country': 'the country that issued the passport',
+    nationality: 'the nationality',
+  }
+  const describeField = (path) => {
+    const who = path.match(/^passengers\[(\d+)\]\./)
+    const tail = path.replace(/^passengers\[\d+\]\./, '').replace(/^contact\./, '')
+    const words = FIELD_WORDS[tail] || tail
+    return who ? `Traveller ${Number(who[1]) + 1}: ${words}` : `Contact: ${words}`
+  }
+  const unmapped = badFields.filter(
+    (f) => !/\.(name|gender|birthday)$/.test(f) && !f.startsWith('contact.'))
 
   return (
     <div className="sheet-backdrop" onClick={onClose} role="presentation">
@@ -331,6 +360,24 @@ export default function BookingSheet({ flight, onClose, voice }) {
               {people.map((p, i) => (
                 <fieldset className="paxrow" key={i}>
                   <legend>Traveller {i + 1}</legend>
+
+                  {/* A passport already holds every one of these fields, in a
+                      form that can be checked rather than trusted. */}
+                  <PassportDrop onRead={(f) => setPeople((ps) => ps.map((x, j) => (
+                    j === i ? {
+                      ...x,
+                      name: f.name || x.name,
+                      gender: f.gender || x.gender,
+                      birthday: f.birthday || x.birthday,
+                      nationality: f.nationality || x.nationality || '',
+                      document: f.document_number ? {
+                        type: f.document_type === 'PP' ? 'PP' : 'PP',
+                        number: f.document_number,
+                        issuing_country: f.issuing_country || undefined,
+                        expires: f.expires || undefined,
+                      } : x.document,
+                    } : x))) } />
+
                   <label>
                     <span>Name as in passport</span>
                     <input type="text" value={p.name} placeholder="TAN/WEI MING"
@@ -386,10 +433,19 @@ export default function BookingSheet({ flight, onClose, voice }) {
               </fieldset>
 
               {badFields.length > 0 && (
-                <p className="warn-line">
-                  {failed || 'Some details are not in the format the airline accepts.'}
-                  {' '}The marked fields need another look.
-                </p>
+                <div className="warn-line">
+                  <p>{failed || 'The airline would not accept some of these details.'}</p>
+                  <ul className="badlist">
+                    {badFields.map((f) => <li key={f}>{describeField(f)}</li>)}
+                  </ul>
+                  {unmapped.length > 0 && (
+                    <p className="fine">
+                      There is no box here for that — it came from the scanned
+                      passport. Use a document that is still valid, or clear the
+                      scan and type the details in.
+                    </p>
+                  )}
+                </div>
               )}
               {failed && badFields.length === 0 && <p className="warn-line">{failed}</p>}
 
@@ -426,10 +482,46 @@ export default function BookingSheet({ flight, onClose, voice }) {
               </ul>
               <p className="fine booking-truth">
                 <strong>This order is real and is holding your seats.</strong> The last
-                step is payment, which Waypoint deliberately does not do for you —
-                paying is yours to authorise, not something an agent should do on
-                your behalf.
+                step is payment, and Waypoint does not take it. Paying is yours to
+                authorise on the airline's own site, where your card details go to
+                them and to nobody else — not to us, and not through an agent.
               </p>
+
+              <div className="payoff">
+                <p className="mono eyebrow">Paying, in your own hands</p>
+                <ol className="paysteps">
+                  <li>
+                    <span>Copy your booking reference</span>
+                    <button type="button" className="btn-secondary btn-copy"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(order.order_no)
+                                .then(() => setCopied(true)).catch(() => {})
+                            }}>
+                      {copied ? 'Copied' : `Copy ${order.order_no}`}
+                    </button>
+                  </li>
+                  <li>
+                    <span>Open {flight.airline_name || 'the airline'}'s own booking page
+                          and pay {money(order.total_price, order.currency || currency)}</span>
+                    {/* A guessed airline URL is exactly the kind of confident
+                        wrong answer this app avoids, so this searches rather
+                        than pretending to know the address. */}
+                    <a className="btn-primary" target="_blank" rel="noopener noreferrer"
+                       href={`https://duckduckgo.com/?q=${encodeURIComponent(
+                         `${flight.airline_name || flight.airline || ''} manage my booking pay`)}`}>
+                      Find the airline's payment page
+                    </a>
+                  </li>
+                </ol>
+                {deadline && (
+                  <p className={`fine${overdue ? ' warn-line' : ''}`}>
+                    {overdue
+                      ? 'The hold has expired — the airline may have released these seats.'
+                      : `Seats are held until ${deadline.toLocaleString()}. After that the fare is released.`}
+                  </p>
+                )}
+              </div>
+
               <div className="sheet-actions">
                 <button type="button" className="btn-secondary" onClick={onClose}>Done</button>
               </div>

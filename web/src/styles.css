@@ -1079,3 +1079,30 @@ img { max-width: 100%; }
   .booking-typed { flex: 1 1 100%; }
   .bagopt { flex: 1 1 calc(50% - 8px); min-width: 0; }
 }
+
+/* ── passport scan, and handing payment back to the traveller ─── */
+
+.ppdrop {
+  margin: 4px 0 14px; padding: 14px; text-align: left;
+  border: 1px dashed var(--line); border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.ppdrop.is-over { border-color: var(--accent); background: var(--surface); }
+.ppdrop.is-busy { opacity: .8; }
+.ppdrop-how { margin: 10px 0 4px; }
+.ppdrop-priv { margin: 0; color: var(--faint); }
+.ppdrop-ok { margin: 8px 0 0; color: var(--accent); }
+
+.payoff {
+  margin: 18px 0 4px; padding: 16px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.paysteps { margin: 10px 0 12px; padding-left: 20px; }
+.paysteps li { margin-bottom: 12px; }
+.paysteps li > span { display: block; margin-bottom: 8px; }
+.paysteps a.btn-primary { display: inline-block; text-decoration: none; }
+.btn-copy { font-variant-numeric: tabular-nums; }
+
+.badlist { margin: 8px 0 4px; padding-left: 20px; }
+.badlist li { margin-bottom: 3px; }
