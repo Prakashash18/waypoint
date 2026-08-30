@@ -22,6 +22,11 @@ SEGMENTS = [
      'Most travel agents stop at the recommendation. This one stops at your wallet. '
      'Waypoint plans a whole trip by voice, books it for real, '
      'and refuses to invent a single thing along the way.'),
+    ('01b-booking',
+     'Two things get booked, and neither by guesswork. Flights go through Atlas — '
+     'it verifies the live fare, prices the baggage, and holds the seats. '
+     'Stays link straight to the listing the rate was quoted on, '
+     'so you book them at the source.'),
     ('02-ask',
      'You say it the way you would to a friend. Four nights in Ubud, two adults, '
      'with flights. It already knows you are flying from Singapore.'),

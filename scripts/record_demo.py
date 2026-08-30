@@ -32,6 +32,50 @@ ASK = 'Four nights in Ubud Bali 28 Sep to 2 Oct 2026, two adults, with flights'
 MARKS = []
 _T0 = [0.0]
 
+# Callouts are drawn into the page rather than composited afterwards: the
+# browser is already rendering, so they cost nothing, they sit in the product's
+# own type, and they cannot drift out of sync with what is underneath them.
+_CALLOUT_CSS = """
+#wp-callout{position:fixed;top:60px;right:36px;z-index:99999;max-width:430px;
+  padding:16px 20px;border-radius:14px;background:rgba(28,25,23,.94);
+  border:1px solid rgba(224,138,104,.45);box-shadow:0 12px 36px rgba(0,0,0,.34);
+  font-family:Inter,system-ui,sans-serif;opacity:0;transform:translateY(-6px);
+  transition:opacity .45s ease,transform .45s ease;pointer-events:none}
+#wp-callout.on{opacity:1;transform:none}
+#wp-callout .r{height:2px;width:32px;background:#e08a68;border-radius:2px;margin-bottom:11px}
+#wp-callout .t{font:600 20px/1.25 Fraunces,Georgia,serif;color:#f4efe7;margin-bottom:5px}
+#wp-callout .s{font-size:14.5px;line-height:1.45;color:#c3b8ab}
+"""
+
+
+def callout(page, title, sub):
+    """Name the part of the app currently on screen."""
+    page.evaluate("""([title, sub, css]) => {
+        let el = document.getElementById('wp-callout');
+        if (!el) {
+            const style = document.createElement('style');
+            style.textContent = css;
+            document.head.appendChild(style);
+            el = document.createElement('div');
+            el.id = 'wp-callout';
+            document.body.appendChild(el);
+        }
+        el.innerHTML = '<div class="r"></div><div class="t"></div><div class="s"></div>';
+        el.querySelector('.t').textContent = title;
+        el.querySelector('.s').textContent = sub;
+        requestAnimationFrame(() => el.classList.add('on'));
+    }""", [title, sub, _CALLOUT_CSS])
+
+
+def clear_callout(page):
+    page.evaluate("""() => {
+        const el = document.getElementById('wp-callout');
+        if (el) el.classList.remove('on');
+    }""")
+
+
+LABELS = {'HUD streaming real calls': ('The agent, working in the open', 'Every line is a real API call — arguments, result, milliseconds'), 'three trips priced': ('One price for the whole trip', 'Both fares plus every night, taxes included'), 'live sources named': ('Where every figure came from', 'Each provider named, each timing shown, gaps admitted'), 'exploring the stay': ('The property’s own photograph', 'From its listing — never a stock image, and bookable at the source'), 'real places nearby, each with walking directions': ('Answered on the map', 'Real places near your stay, each opening Google Maps directions'), 'fare re-verified with the airline': ('Atlas holds the seats', 'Fare re-verified, baggage priced per traveller per leg'), 'who is flying': ('The passport fills the form', 'Machine-readable zone, every check digit verified'), 'ORDER CREATED — seats held': ('A real order, holding real seats', 'Payment deadline running — and the payment left to you')}
+
 
 def beat(page, label, ms=1200):
     """A pause to let the eye land, and a note of where we are.
@@ -42,7 +86,13 @@ def beat(page, label, ms=1200):
     at = time.time() - _T0[0]
     MARKS.append({'at': round(at, 2), 'label': label})
     print(f'  {at:6.1f}s  {label}')
-    page.wait_for_timeout(ms)
+    if label in LABELS:
+        callout(page, *LABELS[label])
+        page.wait_for_timeout(ms)
+        clear_callout(page)
+        page.wait_for_timeout(500)
+    else:
+        page.wait_for_timeout(ms)
 
 
 def run(page):
@@ -121,11 +171,14 @@ def run(page):
     ask.type('What is worth walking to near the hotel?', delay=34)
     beat(page, 'a follow-up, in plain words', 800)
     page.keyboard.press('Enter')
-    page.wait_for_selector('.rcard, .reply-card', timeout=120_000)
-    beat(page, 'real places nearby, each with walking directions', 5200)
-    page.mouse.wheel(0, 380)
-    beat(page, 'every one opens Google Maps from the stay', 4200)
-    page.mouse.wheel(0, -380)
+    # Wait for the attractions card specifically. '.rcard' also matches the
+    # flight and stay cards already on the page, so it matched instantly and
+    # the beat fired while the agent was still thinking.
+    page.wait_for_selector('.rcard.is-nearby', timeout=180_000)
+    page.locator('.rcard.is-nearby').first.scroll_into_view_if_needed()
+    page.wait_for_timeout(600)
+    beat(page, 'real places nearby, each with walking directions', 5600)
+    beat(page, 'every one opens Google Maps from the stay', 4600)
 
     book = page.locator('button', has_text='Book this flight').first
     if not book.count():

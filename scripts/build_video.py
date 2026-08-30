@@ -54,6 +54,7 @@ def main():
     # the previous one has finished, plus a breath.
     ANCHORS = [
         ('01-intro',    None),
+        ('01b-booking', 'INTRO:11.0'),   # on the lanes, inside the opening
         ('02-ask',      'the empty state'),
         ('03-work',     'HUD streaming real calls'),
         ('04-cards',    'three trips priced'),
@@ -68,7 +69,13 @@ def main():
 
     CUES, free = [], 0.0
     for name, label in ANCHORS:
-        anchor = 0.0 if label is None else intro_len + marks[label]
+        if label is None:
+            anchor = 0.0
+        elif isinstance(label, str) and label.startswith('INTRO:'):
+            # A cue placed inside the opening animation, not against the app.
+            anchor = float(label.split(':')[1])
+        else:
+            anchor = intro_len + marks[label]
         at = max(anchor, free)
         CUES.append((name, at))
         free = at + dur(os.path.join(AUD, f'{name}.mp3')) + GAP

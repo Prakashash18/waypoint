@@ -39,13 +39,37 @@
   #b2 .sub{margin-top:26px;font-size:24px;color:var(--dim);max-width:46ch;
            opacity:0;animation:rise .6s ease-out 7.4s forwards}
 
-  /* ── beat 3: the three claims the demo then proves ─────── */
-  #b3{animation:hold 6.2s ease-in-out 10.6s forwards;justify-content:center}
+  /* ── beat 3: who actually does the booking ─────────────── */
+  #bk{animation:hold 8.4s ease-in-out 10.9s forwards;justify-content:center}
+  #bk h3{font:400 40px/1.15 Fraunces,Georgia,serif;margin-bottom:34px;
+         opacity:0;animation:rise .5s ease-out 11.2s forwards}
+  .lanes{display:grid;grid-template-columns:1fr 1fr;gap:30px}
+  .lane{border:1px solid var(--line);border-radius:16px;background:var(--surface);
+        padding:26px 28px;opacity:0;animation:rise .55s cubic-bezier(.2,.7,.3,1) forwards}
+  .lane:nth-child(1){animation-delay:11.8s}
+  .lane:nth-child(2){animation-delay:13.4s}
+  .lane .tag{font:600 12px/1 Inter,sans-serif;letter-spacing:.13em;text-transform:uppercase;
+             color:var(--accent);display:block;margin-bottom:14px}
+  .lane .who{font:600 27px/1.2 Inter,sans-serif;margin-bottom:8px}
+  .lane .who em{font-style:normal;color:var(--accent)}
+  .lane p{font-size:17px;color:var(--dim);line-height:1.5}
+  .flow{display:flex;align-items:center;gap:9px;margin-top:16px;flex-wrap:wrap}
+  .flow span{font:500 14px/1 Inter,sans-serif;color:var(--dim);border:1px solid var(--line);
+             border-radius:999px;padding:6px 11px;background:var(--paper);white-space:nowrap;
+             opacity:0;animation:rise .4s ease-out forwards}
+  .lane:nth-child(1) .flow span:nth-child(1){animation-delay:12.2s}
+  .lane:nth-child(1) .flow span:nth-child(2){animation-delay:12.5s}
+  .lane:nth-child(1) .flow span:nth-child(3){animation-delay:12.8s}
+  .lane:nth-child(2) .flow span:nth-child(1){animation-delay:13.8s}
+  .lane:nth-child(2) .flow span:nth-child(2){animation-delay:14.1s}
+
+  /* ── beat 4: the three claims the demo then proves ─────── */
+  #b3{animation:hold 6.2s ease-in-out 19.4s forwards;justify-content:center}
   .three{display:grid;grid-template-columns:repeat(3,1fr);gap:38px}
   .three>div{opacity:0;animation:rise .55s cubic-bezier(.2,.7,.3,1) forwards}
-  .three>div:nth-child(1){animation-delay:11.0s}
-  .three>div:nth-child(2){animation-delay:11.7s}
-  .three>div:nth-child(3){animation-delay:12.4s}
+  .three>div:nth-child(1){animation-delay:19.8s}
+  .three>div:nth-child(2){animation-delay:20.5s}
+  .three>div:nth-child(3){animation-delay:21.2s}
   .three h2{font:600 13px/1 Inter,sans-serif;letter-spacing:.13em;text-transform:uppercase;
             color:var(--accent);margin-bottom:12px}
   .three p{font-size:18px;color:var(--dim);line-height:1.5}
@@ -54,7 +78,7 @@
 
   .foot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;
         align-items:center;padding-top:24px;border-top:1px solid var(--line);
-        font-size:15px;color:var(--faint);opacity:0;animation:rise .6s ease-out 12.9s forwards}
+        font-size:15px;color:var(--faint);opacity:0;animation:rise .6s ease-out 21.7s forwards}
   .foot .stack{display:flex;gap:8px}
   .foot .stack span{border:1px solid var(--line);border-radius:999px;padding:5px 12px;
                     background:var(--surface);color:var(--dim);white-space:nowrap}
@@ -93,6 +117,30 @@
     </h1>
     <p class="sub">A voice-first agent that plans a whole trip, books it for real,
        and refuses to invent a single thing along the way.</p>
+  </div>
+
+  <div class="beat" id="bk">
+    <h3>Two things get booked. Neither of them by guesswork.</h3>
+    <div class="lanes">
+      <div class="lane">
+        <span class="tag">Flights</span>
+        <div class="who">Booked through <em>Atlas</em></div>
+        <p>Atlas is what makes the booking real — it verifies the live fare,
+           prices the baggage, and holds the seats.</p>
+        <div class="flow">
+          <span>verify fare</span><span>add baggage</span><span>order held</span>
+        </div>
+      </div>
+      <div class="lane">
+        <span class="tag">Stays</span>
+        <div class="who">Booked on the <em>source site</em></div>
+        <p>Every stay links straight to the listing the rate was quoted on.
+           We never hold rooms or take payment.</p>
+        <div class="flow">
+          <span>real listing</span><span>same price you saw</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="beat" id="b3">
