@@ -105,6 +105,7 @@ export default function App() {
     setPreviewDate(null)
     if (chosen) setStage('ask')
     setMessages((prev) => [...prev, { role: 'user', text: request }])
+    setBrief('')
     if (!chosen) setStage('choose')
     const controller = new AbortController()
     abortRef.current = controller
@@ -163,7 +164,6 @@ export default function App() {
 
   /** Ask a follow-up. Clears the box so the thread is the record, not the input. */
   const ask = useCallback((question) => {
-    setBrief('')
     run(question, { spoken: voiceOut })
   }, [run, voiceOut])
 
@@ -218,12 +218,25 @@ export default function App() {
   }, [sessionId])
 
   const onTranscript = useCallback((text) => {
-    setBrief(text)
+    // No need to put it in the box first — run() clears it, and the thread
+    // shows what was heard.
     run(text, { spoken: true })
   }, [run])
 
   const trip = result?.trip
   const anchorDate = trip?.flight?.outbound?.depart?.slice(0, 10)
+
+  // With an answer on screen the box prompts the next question rather than
+  // repeating a generic hint — the agent already worked out what is worth
+  // asking, so the input may as well say it.
+  const suggested = result?.follow_ups?.[0]
+  const nextPrompt = !conversing
+    ? 'A few quiet nights in Bali, under $900, whenever is cheapest…'
+    : busy
+      ? 'Ask something else while this runs…'
+      : suggested
+        ? `Ask anything — e.g. “${suggested}”`
+        : 'Ask anything — “somewhere quieter?”, “what about the 26th?”'
 
   // Previewing a date re-prices the options on screen from windows we already
   // paid for, so comparing dates costs nothing.
@@ -314,9 +327,7 @@ export default function App() {
                   run()
                 }
               }}
-              placeholder={conversing
-                ? 'Ask anything — “somewhere quieter?”, “what about the 26th?”'
-                : 'A few quiet nights in Bali, under $900, whenever is cheapest…'}
+              placeholder={nextPrompt}
               rows={conversing ? 2 : 3}
               aria-label="What kind of trip?"
             />
@@ -451,18 +462,18 @@ export default function App() {
 
       {result && voiceReady && (
         <footer className="dock">
-          <KeepTalking voice={voice} onAsk={(t) => { setBrief(t); run(t, { spoken: true }) }}
+          <KeepTalking voice={voice} onAsk={(t) => run(t, { spoken: true })}
                        disabled={busy} />
         </footer>
       )}
 
       {openHotel && (
         <HotelDetail hotel={openHotel} onClose={() => setOpenHotel(null)}
-                     onAsk={(t) => { setOpenHotel(null); setBrief(t); run(t, { spoken: true }) }} />
+                     onAsk={(t) => { setOpenHotel(null); run(t, { spoken: true }) }} />
       )}
       {openCombo && (
         <TripDetail combo={openCombo} onClose={() => setOpenCombo(null)}
-                    onAsk={(q) => { setBrief(q); run(q, { spoken: true }) }}
+                    onAsk={(q) => run(q, { spoken: true })}
                     onBookFlight={(f) => { setOpenCombo(null); setBooking(f) }} />
       )}
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}

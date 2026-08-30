@@ -1237,6 +1237,20 @@ def _follow_ups(result: dict) -> list:
     hotels = artifacts.get('hotels') or []
     named = hotels[0].get('name') if hotels else None
 
+    # What the cards already answer. Suggesting these back is the commonest
+    # way this strip becomes noise — "what are the rates?" beside the rates.
+    shown = []
+    if any(h.get('total_price') is not None for h in hotels):
+        shown.append('nightly and total prices for each stay')
+    if any(h.get('review_score') for h in hotels):
+        shown.append('review scores and counts')
+    if any(h.get('image_url') for h in hotels):
+        shown.append('a photograph of each stay')
+    if artifacts.get('flights') or artifacts.get('windows'):
+        shown.append('the flight times, airline and fare')
+    if artifacts.get('windows'):
+        shown.append('prices for the nearby dates')
+
     fallback = [q for q in (
         f'Is {named} quiet at night?' if named else None,
         f'What is within walking distance of {named}?' if named else None,
@@ -1260,11 +1274,16 @@ def _follow_ups(result: dict) -> list:
                  'question in the traveller\'s voice, under 9 words, answerable '
                  'from flights, hotel rates, photos, maps or area information. '
                  'Name real hotels or dates from the context. Never repeat what '
-                 'the answer already said.'},
+                 'the answer already said, and never ask for something the '
+                 'interface is already displaying — those are listed below. '
+                 'Good questions go beyond the screen: what a place is like, '
+                 'what is walkable, whether shifting helps, what a bag costs.'},
                 {'role': 'user', 'content':
                  f"They asked: {result.get('request', '')}\n\n"
                  f"Answer given: {(result.get('answer') or '')[:900]}\n\n"
-                 f"Stays available: {', '.join(h.get('name', '') for h in hotels[:5])}"},
+                 f"Stays available: {', '.join(h.get('name', '') for h in hotels[:5])}\n\n"
+                 f"Already on screen, so do NOT ask about these: "
+                 f"{'; '.join(shown) if shown else 'nothing yet'}"},
             ],
         )
         questions = json.loads(reply.choices[0].message.content).get('questions') or []
