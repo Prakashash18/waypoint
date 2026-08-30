@@ -118,6 +118,20 @@ export default function App() {
         // follow-up still refer to the results on screen.
         seen: onScreen(result),
         needs,
+        // Which trip is open. Without this, "that hotel" is ambiguous the
+        // moment more than one option has been found, and the agent has to
+        // stop and ask which one.
+        looking_at: chosen ? {
+          label: chosen.label,
+          hotel: chosen.hotel?.name,
+          hotel_id: chosen.hotel?.hotel_id,
+          lat: chosen.hotel?.lat,
+          lon: chosen.hotel?.lon,
+          total: chosen.total,
+          currency: chosen.currency,
+          flight: chosen.flight?.flight_code,
+          airline: chosen.flight?.airline_name,
+        } : null,
       }
       // Streamed so the HUD can show each lookup as it happens, rather than
       // holding a spinner for the whole 15-odd seconds.

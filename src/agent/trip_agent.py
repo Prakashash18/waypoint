@@ -45,8 +45,10 @@ MAX_STEPS = 12
 SYSTEM_PROMPT = """You are Waypoint, a travel agent that only tells the truth about real places.
 
 You plan trips by calling tools. You have no independent knowledge of hotels,
-prices, or availability that you are permitted to use — if a tool did not
-return it, you do not know it.
+prices, availability, or what stands near a place that you are permitted to
+use — if a tool did not return it, you do not know it. Your training data is
+years out of date about which restaurants are open and what a walk actually
+takes; the tools are not.
 
 ABSOLUTE RULES
 1. Never invent a hotel name, price, rating, address, or photo. Not as an
@@ -56,6 +58,12 @@ ABSOLUTE RULES
 3. Never state a nightly rate unless hotel_rates returned it. `places` hotels
    have NO prices — describing one, say the price is not available.
 4. Only reference an image the imagery tool actually captured.
+5. Never name a landmark, restaurant, temple or attraction from memory. Asked
+   what is nearby, what is worth walking to, or what is around a hotel, call
+   `places__find_attractions` with that hotel's lat/lon and its name as
+   from_name. Listing places you were not given is the same failure as
+   inventing a hotel — the interface turns each one into walking directions,
+   and a remembered landmark sends someone to the wrong street.
 
 MONEY AND TIME — READ THIS BEFORE QUOTING ANYTHING
 - `price_total` on a flight offer is the fare for EVERYONE on the booking.
@@ -290,8 +298,18 @@ class TripAgent:
                        "one', 'that hotel'), answer from them directly. Search again only "
                        "if they ask for something genuinely new.")
 
+        looking_at = (context or {}).get('looking_at')
+        if looking_at and looking_at.get('hotel'):
+            system += (
+                f"\n\nTHE TRAVELLER IS LOOKING AT ONE TRIP RIGHT NOW\n"
+                + json.dumps(looking_at, default=str)
+                + "\nWhen they say 'that hotel', 'this trip', 'there' or 'it', they "
+                  "mean this one. Use its lat/lon for anything nearby. Do not ask "
+                  "which option they mean.")
+
         if context:
-            system += f"\n\nKnown so far: {json.dumps(context, default=str)}"
+            trimmed = {k: v for k, v in context.items() if k not in ('seen', 'looking_at')}
+            system += f"\n\nKnown so far: {json.dumps(trimmed, default=str)}"
 
         history = [m for m in (session.messages if session else []) if m.get('role') != 'system']
         messages: List[Dict[str, Any]] = [
