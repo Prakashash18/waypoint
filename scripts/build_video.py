@@ -30,12 +30,10 @@ def main():
     marks = {m['label']: m['at'] for m in
              json.load(open(os.path.join(VID, 'marks.json')))}
 
-    intro_len = dur(os.path.join(AUD, '01-intro.mp3')) + 1.4    # a beat to read on
-    sh(['ffmpeg', '-y', '-loglevel', 'error', '-loop', '1',
-        '-i', os.path.join(ROOT, 'demo', 'intro', 'intro.png'),
-        '-t', f'{intro_len:.2f}', '-vf', 'scale=1280:800,fps=30,format=yuv420p',
-        '-c:v', 'libx264', '-preset', 'slow', '-crf', '18',
-        os.path.join(VID, 'intro.mp4')])
+    intro_mp4 = os.path.join(VID, 'intro.mp4')
+    if not os.path.exists(intro_mp4):
+        sys.exit('Run scripts/render_intro.py first — the opening is missing.')
+    intro_len = dur(intro_mp4)
 
     # The recording is webm; normalise both to the same codec before joining.
     sh(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw,
@@ -45,27 +43,42 @@ def main():
 
     listing = os.path.join(VID, 'parts.txt')
     with open(listing, 'w') as fh:
-        fh.write(f"file '{os.path.join(VID, 'intro.mp4')}'\n")
+        fh.write(f"file '{intro_mp4}'\n")
         fh.write(f"file '{os.path.join(VID, 'body.mp4')}'\n")
     sh(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0',
         '-i', listing, '-c', 'copy', os.path.join(VID, 'silent.mp4')])
 
-    # Narration: line -> the beat it belongs on, offset into the joined timeline.
-    CUES = [
-        ('01-intro',    0.0),
-        ('02-ask',      marks['the empty state']),
-        ('03-work',     marks['HUD streaming real calls']),
-        ('04-cards',    marks['three trips priced']),
-        ('05-truth',    marks['whole-trip pricing + provenance']),
-        ('06-book',     marks['fare re-verified with the airline']),
-        ('07-passport', marks['who is flying']),
-        ('08-order',    marks['ORDER CREATED — seats held']),
+    # Narration: each line is anchored to the beat it describes. Anchors alone
+    # let two lines collide when the beats are closer together than the lines
+    # are long — which is exactly what happened — so a line never starts before
+    # the previous one has finished, plus a breath.
+    ANCHORS = [
+        ('01-intro',    None),
+        ('02-ask',      'the empty state'),
+        ('03-work',     'HUD streaming real calls'),
+        ('04-cards',    'three trips priced'),
+        ('05-sources',  'live sources named'),
+        ('06-stay',     'exploring the stay'),
+        ('07-nearby',   'every one opens Google Maps from the stay'),
+        ('08-book',     'fare re-verified with the airline'),
+        ('09-passport', 'who is flying'),
+        ('10-order',    'ORDER CREATED — seats held'),
     ]
+    GAP = 0.45
+
+    CUES, free = [], 0.0
+    for name, label in ANCHORS:
+        anchor = 0.0 if label is None else intro_len + marks[label]
+        at = max(anchor, free)
+        CUES.append((name, at))
+        free = at + dur(os.path.join(AUD, f'{name}.mp3')) + GAP
+
+    body_len = dur(raw)
+    if free > intro_len + body_len:
+        print(f'  ! narration runs {free - (intro_len + body_len):.1f}s past the picture')
 
     inputs, filters, mixes = ['-i', os.path.join(VID, 'silent.mp4')], [], []
-    for i, (name, at) in enumerate(CUES):
-        # Everything after the intro sits on the far side of the slide.
-        offset = at if name == '01-intro' else intro_len + at
+    for i, (name, offset) in enumerate(CUES):
         inputs += ['-i', os.path.join(AUD, f'{name}.mp3')]
         filters.append(f'[{i + 1}:a]adelay={int(offset * 1000)}|{int(offset * 1000)}[a{i}]')
         mixes.append(f'[a{i}]')
@@ -76,15 +89,18 @@ def main():
         '-filter_complex', graph, '-map', '0:v', '-map', '[out]',
         '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', OUT])
 
-    for tmp in ('intro.mp4', 'body.mp4', 'silent.mp4', 'parts.txt'):
+    for tmp in ('body.mp4', 'silent.mp4', 'parts.txt'):
         os.remove(os.path.join(VID, tmp))
 
     total = dur(OUT)
     print(f'\n  {OUT}')
     print(f'  {total:.0f}s  ({total / 60:.1f} min of a 3:00 budget)')
-    for name, at in CUES:
-        off = at if name == '01-intro' else intro_len + at
-        print(f'    {off:6.1f}s  {name}')
+    prev_end = 0.0
+    for name, off in CUES:
+        end = off + dur(os.path.join(AUD, f'{name}.mp3'))
+        clash = '  OVERLAP' if off < prev_end - 0.01 else ''
+        print(f'    {off:6.1f}s → {end:6.1f}s  {name}{clash}')
+        prev_end = end
 
 
 if __name__ == '__main__':

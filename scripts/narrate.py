@@ -23,25 +23,30 @@ SEGMENTS = [
      'Waypoint plans a whole trip by voice, books it for real, '
      'and refuses to invent a single thing along the way.'),
     ('02-ask',
-     'You just say it, the way you would to a friend. '
-     'Four nights in Ubud, two adults, with flights. '
-     'It already knows you are flying from Singapore.'),
+     'You say it the way you would to a friend. Four nights in Ubud, two adults, '
+     'with flights. It already knows you are flying from Singapore.'),
     ('03-work',
-     'And then it works in the open. Every line here is a real API call — '
-     'what was asked, what came back, how long it took. No spinner, no black box.'),
+     'Then it works in the open. Every line is a real API call — what was asked, '
+     'what came back, how long it took. No spinner, no black box.'),
     ('04-cards',
      'Three real trips. Each price is the whole journey: both fares, every night, '
      'taxes included — matched against Booking dot com to the cent.'),
-    ('05-truth',
-     'When a source has nothing, it says so. It will not substitute a stock photograph '
-     'or guess a price. Every figure on this screen carries where it came from.'),
-    ('06-book',
+    ('05-sources',
+     'And here is where all of it came from. Every provider that answered is named, '
+     'and so is every one that had nothing. No stock photographs, no guessed prices.'),
+    ('06-stay',
+     'Open a property and the photographs are of that building, taken from its own '
+     'listing. When there is no authentic image, it says so rather than substituting one.'),
+    ('07-nearby',
+     'Ask a follow-up in plain words and it answers on the map — real places near '
+     'your stay, each one opening walking directions from the door of your hotel.'),
+    ('08-book',
      'Now it books. The fare is re-verified with the airline, baggage is priced per '
      'traveller per leg, and the total follows your choice.'),
-    ('07-passport',
+    ('09-passport',
      'Passenger details come from the passport itself. It reads the machine-readable '
-     'zone and checks every digit, so a misread is caught instead of ending up on a ticket.'),
-    ('08-order',
+     'zone and checks every digit, so a misread is caught instead of reaching a ticket.'),
+    ('10-order',
      'And that is a real order, holding real seats, with a payment deadline. '
      'Everything except the payment — because moving your money should stay yours.'),
 ]

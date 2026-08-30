@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Waypoint — intro</title>
+<title>Waypoint — opening</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap');
   :root{
@@ -7,41 +7,60 @@
     --line:#e5ddd1; --accent:#b45332; --surface:#fffdfa;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{
-    width:1280px;height:800px;background:var(--paper);color:var(--ink);
-    font:400 20px/1.55 Inter,system-ui,sans-serif;overflow:hidden;
-    display:flex;align-items:center;justify-content:center;
-  }
-  .slide{width:100%;height:100%;padding:78px 92px;display:flex;flex-direction:column;
-         opacity:0;animation:in .7s ease-out forwards}
-  @keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  body{width:1280px;height:800px;background:var(--paper);color:var(--ink);
+       font:400 20px/1.55 Inter,system-ui,sans-serif;overflow:hidden}
+  .stage{position:relative;width:100%;height:100%;padding:76px 92px;
+         display:flex;flex-direction:column}
 
-  .brand{display:flex;align-items:center;gap:11px;margin-bottom:auto}
+  /* Every beat is placed on one timeline, so the words arrive with the voice. */
+  .beat{position:absolute;inset:76px 92px;opacity:0;display:flex;
+        flex-direction:column;justify-content:center}
+  @keyframes hold{ from{opacity:0} 6%{opacity:1} 92%{opacity:1} to{opacity:0} }
+  @keyframes rise{ from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:none} }
+  @keyframes wipe{ from{transform:scaleX(0)} to{transform:scaleX(1)} }
+
+  .brand{position:absolute;top:0;left:0;display:flex;align-items:center;gap:11px;
+         opacity:0;animation:rise .6s ease-out .2s forwards}
   .brand svg{color:var(--accent)}
-  .brand b{font:600 23px/1 Fraunces,Georgia,serif;letter-spacing:.01em}
+  .brand b{font:600 23px/1 Fraunces,Georgia,serif}
 
-  h1{font:400 56px/1.08 Fraunces,Georgia,serif;letter-spacing:-.02em;
-     max-width:21ch;margin-bottom:18px}
-  h1 em{font-style:normal;color:var(--accent)}
-  .sub{font-size:22px;color:var(--dim);max-width:52ch;line-height:1.5}
+  /* ── beat 1: the problem ───────────────────────────────── */
+  #b1{animation:hold 5.6s ease-in-out .6s forwards}
+  h1{font:400 66px/1.1 Fraunces,Georgia,serif;letter-spacing:-.02em;max-width:18ch}
+  h1 .w{display:inline-block;opacity:0;animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards}
+  #b1 .strike{position:relative;display:inline-block}
+  #b1 .strike::after{content:'';position:absolute;left:-2px;right:-2px;top:56%;height:3px;
+    background:var(--accent);transform-origin:left;transform:scaleX(0);
+    animation:wipe .5s ease-out 3.6s forwards}
 
-  .rule{height:1px;background:var(--line);margin:34px 0 28px}
+  /* ── beat 2: the claim ─────────────────────────────────── */
+  #b2{animation:hold 5.2s ease-in-out 5.9s forwards}
+  #b2 h1{font-size:74px;color:var(--accent);max-width:16ch}
+  #b2 .sub{margin-top:26px;font-size:24px;color:var(--dim);max-width:46ch;
+           opacity:0;animation:rise .6s ease-out 7.4s forwards}
 
-  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:36px;margin-bottom:auto}
+  /* ── beat 3: the three claims the demo then proves ─────── */
+  #b3{animation:hold 6.2s ease-in-out 10.6s forwards;justify-content:center}
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:38px}
+  .three>div{opacity:0;animation:rise .55s cubic-bezier(.2,.7,.3,1) forwards}
+  .three>div:nth-child(1){animation-delay:11.0s}
+  .three>div:nth-child(2){animation-delay:11.7s}
+  .three>div:nth-child(3){animation-delay:12.4s}
   .three h2{font:600 13px/1 Inter,sans-serif;letter-spacing:.13em;text-transform:uppercase;
-            color:var(--accent);margin-bottom:11px}
-  .three p{font-size:17.5px;color:var(--dim);line-height:1.52}
+            color:var(--accent);margin-bottom:12px}
+  .three p{font-size:18px;color:var(--dim);line-height:1.5}
   .three b{color:var(--ink);font-weight:600}
+  .three .num{font:400 40px/1 Fraunces,Georgia,serif;color:var(--line);margin-bottom:10px}
 
-  .foot{display:flex;justify-content:space-between;align-items:center;gap:28px;
-        padding-top:26px;border-top:1px solid var(--line);font-size:15px;color:var(--faint)}
-  .foot .stack{display:flex;gap:8px;flex-wrap:nowrap}
+  .foot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;
+        align-items:center;padding-top:24px;border-top:1px solid var(--line);
+        font-size:15px;color:var(--faint);opacity:0;animation:rise .6s ease-out 12.9s forwards}
+  .foot .stack{display:flex;gap:8px}
   .foot .stack span{border:1px solid var(--line);border-radius:999px;padding:5px 12px;
                     background:var(--surface);color:var(--dim);white-space:nowrap}
-  .foot .where{text-align:right;white-space:nowrap}
 </style>
 
-<div class="slide">
+<div class="stage">
   <div class="brand">
     <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor"
          stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -51,35 +70,58 @@
     <b>Waypoint</b>
   </div>
 
-  <h1>Most travel agents stop at the recommendation.<br><em>This one stops at your wallet.</em></h1>
-  <p class="sub">A voice-first agent that plans a whole trip, then books it for real —
-     and refuses to invent a single thing along the way.</p>
-
-  <div class="rule"></div>
-
-  <div class="three">
-    <div>
-      <h2>It acts</h2>
-      <p>Verifies the live fare, prices baggage per leg, and creates a <b>real order
-         holding real seats</b> — not a link to somewhere else.</p>
-    </div>
-    <div>
-      <h2>It shows its work</h2>
-      <p>Every tool call visible as it runs: what was asked, what came back,
-         how long it took. <b>No black box.</b></p>
-    </div>
-    <div>
-      <h2>It won't make things up</h2>
-      <p>Every price and photograph carries its source. When one goes dark it
-         <b>says so</b> instead of guessing.</p>
-    </div>
+  <div class="beat" id="b1">
+    <h1>
+      <span class="w" style="animation-delay:.8s">Most</span>
+      <span class="w" style="animation-delay:1.0s">travel</span>
+      <span class="w" style="animation-delay:1.2s">agents</span>
+      <span class="w" style="animation-delay:1.5s">stop</span>
+      <span class="w" style="animation-delay:1.7s">at</span>
+      <span class="w" style="animation-delay:1.9s">the</span>
+      <span class="w strike" style="animation-delay:2.1s">recommendation.</span>
+    </h1>
   </div>
 
-  <div class="foot">
-    <div class="stack">
-      <span>Atlas Flight APIs</span><span>Booking.com</span><span>OpenStreetMap</span>
-      <span>ElevenLabs</span><span>OpenAI</span>
+  <div class="beat" id="b2">
+    <h1>
+      <span class="w" style="animation-delay:6.2s">This</span>
+      <span class="w" style="animation-delay:6.4s">one</span>
+      <span class="w" style="animation-delay:6.6s">stops</span>
+      <span class="w" style="animation-delay:6.8s">at</span>
+      <span class="w" style="animation-delay:7.0s">your</span>
+      <span class="w" style="animation-delay:7.2s">wallet.</span>
+    </h1>
+    <p class="sub">A voice-first agent that plans a whole trip, books it for real,
+       and refuses to invent a single thing along the way.</p>
+  </div>
+
+  <div class="beat" id="b3">
+    <div class="three">
+      <div>
+        <div class="num">01</div>
+        <h2>It acts</h2>
+        <p>Verifies the live fare, prices baggage per leg, and creates a
+           <b>real order holding real seats</b>.</p>
+      </div>
+      <div>
+        <div class="num">02</div>
+        <h2>It shows its work</h2>
+        <p>Every tool call visible as it runs — what was asked, what came back,
+           how long it took. <b>No black box.</b></p>
+      </div>
+      <div>
+        <div class="num">03</div>
+        <h2>It won't make things up</h2>
+        <p>Every price and photograph carries its source. When one goes dark it
+           <b>says so</b>.</p>
+      </div>
     </div>
-    <div class="where">Singapore · Alibaba Cloud &times; Atlas Agentic AI Hackathon</div>
+    <div class="foot">
+      <div class="stack">
+        <span>Atlas Flight APIs</span><span>Booking.com</span><span>OpenStreetMap</span>
+        <span>ElevenLabs</span><span>OpenAI</span>
+      </div>
+      <div>Singapore · Alibaba Cloud &times; Atlas Agentic AI Hackathon</div>
+    </div>
   </div>
 </div>
