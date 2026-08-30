@@ -1,1 +1,0 @@
-var e={initial:{},animate:{transition:{staggerChildren:.09,delayChildren:.06}}},t={initial:{opacity:0,y:24,scale:.97},animate:{opacity:1,y:0,scale:1,transition:{duration:.4,ease:[.22,1,.36,1]}}};export{e as n,t};

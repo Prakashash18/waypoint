@@ -22,10 +22,10 @@ photography standing in for a hotel, no invented fare, no guessed link.
 
 ### TODO
 
-- [ ] **Deploy to Alibaba Cloud.** ECS in **Singapore**, not a mainland region:
-      the app calls OpenAI, ElevenLabs and RapidAPI on nearly every request, and
-      those are unreachable or unreliable from mainland regions. Singapore also
-      avoids the ICP filing a mainland-hosted domain requires.
+- [ ] **Deploy to Alibaba Cloud** — written up in full below, and deliberately
+      not done yet: Chromium needs ~450MB of headroom, which puts it above the
+      free tier, and the cost is not worth carrying while the app is still
+      changing daily. It runs locally in the meantime.
 - [ ] Behind a proxy, set `proxy_buffering off` — the agent streams its progress
       over SSE, and a buffering proxy makes it arrive in one silent lump.
 - [ ] Surface the Atlas account states (`TOP_UP_REQUIRED`,
@@ -36,49 +36,43 @@ photography standing in for a hotel, no invented fare, no guessed link.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Waypoint Agent                          │
-├─────────────────────────────────────────────────────────────┤
-│  UI Layer (Flask + React)                                    │
-│  • Disruption intake form                                    │
-│  • Checkpoint decision cards                                 │
-│  • Audit trail viewer                                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│  Agent Orchestration                                         │
-│  • SearchEngine: Find & rank replacement flights             │
-│  • CheckpointManager: 4 mandatory approval checkpoints       │
-│  • AuditTrail: Append-only decision log                      │
-│  • ReasoningEngine: Qwen-powered tradeoff generation         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│  CLI Wrapper Layer                                           │
-│  • Subprocess calls to atlas-flight CLI                      │
-│  • JSON envelope parser                                      │
-│  • Error taxonomy & retry logic                              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    │  atlas-flight CLI  │
-                    │  (Apache-2.0)      │
-                    └───────────────────┘
+Browser (React, voice-first)
+        │  one sentence in, cards + spoken reply out
+        ▼
+Flask  ──  /api/agent/stream    the agent's progress, as it happens (SSE)
+           /api/booking/*       prepare · baggage · order · scan-passport
+           /api/voice/*         ElevenLabs speech in and out
+        │
+        ▼
+TripAgent — an OpenAI tool-calling loop over a registry of tools, each of
+            which returns a result *and* the provenance of that result
+        │
+        ├── atlas_flights   Atlas CLI: search, verify, confirm price,
+        │                   baggage, order — the booking spine
+        ├── hotel_rates     Booking.com via RapidAPI (prices include tax)
+        ├── places          OpenStreetMap: geocoding, airports, attractions
+        ├── imagery         Playwright screenshots of the real property
+        ├── locale          where the traveller is, for currency and origin
+        └── websearch       Wikipedia / Nominatim place resolution
 ```
 
-## Four Mandatory Checkpoints
+**No record without provenance.** Every tool returns a `Provenance` alongside
+its data — `LIVE`, `CACHED`, `UNAVAILABLE`, `NOT_CONFIGURED` or `FAILED` — and
+the UI shows it. A tool that cannot answer says so; none of them may invent a
+substitute.
 
-1. **Initial Booking Authorization** — Present ranked options, get permission to proceed
-2. **Price Change Acceptance** — Fare moved between search and verify; explicit re-confirmation required
-3. **Seat Fallback Selection** — Preferred seat unavailable; approve auto-assignment
-4. **Final Payment Summary** — Show total, confirm payment from Atlas balance
+## Booking, and where it stops
 
-Each checkpoint displays:
-- What permission is being requested
-- Agent's reasoning
-- What changed since the last checkpoint
-- Exact CLI command that will execute
-- Approve / Reject / Ask Question buttons
+Flights are booked through **Atlas**, which is what makes the booking real: the
+fare is re-verified, baggage is priced per traveller per leg, and an order is
+created that holds actual seats with a payment deadline.
+
+Stays are **not** booked here. Each one links to the listing its rate was quoted
+on; Waypoint never holds a room or takes a payment for one.
+
+Payment is deliberately the traveller's own step. The order is settled on
+Atlas, from an Atlas account balance — the app hands over the reference and the
+link, and no agent moves money.
 
 ## Installation
 
@@ -131,13 +125,17 @@ pip install -r requirements.txt
 
 ### Configure API Keys (Optional)
 
-For Qwen-powered reasoning (via Alibaba Cloud Model Studio):
+The app uses OpenAI for the agent loop and ElevenLabs for voice. Booking.com
+rates come through RapidAPI. Put them in `.env`:
 
 ```bash
-export DASHSCOPE_API_KEY="your-api-key-here"
+OPENAI_API_KEY=...        # the agent loop, and reading a passport's MRZ
+ELEVENLABS_API_KEY=...    # speech in and out (optional; typing works too)
+RAPIDAPI_KEY=...          # Booking.com hotel rates, via booking-com15
 ```
 
-Without the API key, the system uses template-based reasoning.
+Everything else — OpenStreetMap, Wikipedia, ip-api — needs no key. Any provider
+that is missing degrades honestly rather than silently.
 
 ## Usage
 
@@ -151,137 +149,109 @@ The UI will be available at http://localhost:2000
 
 ### End-to-End Flow
 
-1. **Disruption Intake**: Enter cancelled flight details (origin, destination, departure time, passengers, hard deadline)
-
-2. **Options Display**: Agent searches and ranks replacement flights with tradeoff descriptions:
-   - "Cheapest but arrives 4h after your deadline"
-   - "Only option that makes the meeting, +$180"
-   - "Best overall value"
-
-3. **Select Option**: Click on preferred option → Checkpoint 1 fires
-
-4. **Approve Checkpoints**: At each checkpoint, review:
-   - Agent's reasoning
-   - What changed (especially price movements)
-   - Exact CLI command
-   - Approve or reject
-
-5. **Ticket Issuance**: After final approval, agent executes:
-   - `offer verify` → `booking confirm-price` → `booking seat` → `order create` → `order pay`
-   - Polls `order status` until ticket issued (up to 120s)
-
-6. **Export Audit Trail**: Download complete audit log (JSON or CSV) with timestamps, request IDs, and all decisions
+1. **Ask** — "Four nights in Ubud, 28 Sep to 2 Oct, two adults, with flights."
+   Origin and currency come from the traveller's own location.
+2. **Watch it work** — every tool call streams in as it runs, with its
+   arguments, what came back, and how long it took.
+3. **Compare** — three whole-trip options (cheapest, best value, best reviewed),
+   each priced as both fares plus every night, taxes included.
+4. **Explore** — open a stay for its own photographs and sources, or ask a
+   follow-up in plain words and get answers on the map.
+5. **Book the flight** — fare re-verified, baggage chosen, passenger details
+   taken from a passport scan or typed in.
+6. **Settle it yourself** — the order is created and holding seats; payment
+   happens on Atlas, not here.
 
 ### API Endpoints
 
 ```bash
-# Submit disruption
-POST /api/disruption
-{
-  "origin": "KUL",
-  "destination": "SIN",
-  "original_departure": "2026-09-15T08:00:00",
-  "passengers": 1,
-  "hard_deadline": "2026-09-15T13:00:00"
-}
+# Plan a trip (blocking), or stream the agent's progress
+POST /api/agent/plan       {"request": "..."}
+POST /api/agent/stream     {"request": "..."}       # SSE
+POST /api/agent/cancel     {"session_id": "..."}
 
-# Get ranked options
-GET /api/options
+# Booking
+POST /api/booking/prepare        {"offer_id": "..."}      # verify + price + baggage
+POST /api/booking/baggage        {"booking_id", "traveler_id", "segment_id", "baggage_id"}
+POST /api/booking/order          {"booking_id", "passengers": [...], "contact": {...}}
+POST /api/booking/scan-passport  (multipart image)        # reads the MRZ
 
-# Select option (triggers Checkpoint 1)
-POST /api/select-option
-{ "option_index": 0 }
-
-# Decide checkpoint
-POST /api/checkpoint/{checkpoint_id}/decide
-{ "decision": "approve", "notes": "Optional notes" }
-
-# Get current state
-GET /api/state
-
-# Get audit trail
-GET /api/audit?format=json|csv
-
-# Export audit trail
-GET /api/audit/export?format=json|csv
-
-# Reset session
-POST /api/reset
+# Voice, context and housekeeping
+POST /api/voice/transcribe   ·  POST /api/voice/speak
+GET  /api/locale             ·  GET  /api/sources
+GET  /api/settings/cache     ·  GET  /api/health
 ```
 
 ## Failure Handling
 
-### Price Changes
-- If price increases between `offer verify` and `booking confirm-price`, Checkpoint 2 fires
-- Agent never auto-accepts price changes
-- Shows original vs. new price with explicit diff
+Every one of these is visible to the traveller rather than swallowed:
 
-### Payment Failures
-- **Retryable errors**: Exponential backoff, up to 3 retries
-- **Terminal errors**: Stop immediately, log error
-- **Indeterminate errors**: Never retry; mark as indeterminate and halt
-
-### Offer Expiration
-- Offers have TTL (typically 15 minutes)
-- If expired, agent stops and reports error
-- User must start new search
-
-### Seat Unavailability
-- Triggers Checkpoint 3 (seat fallback)
-- User approves auto-assignment
-- Does not block main booking flow
+- **Price moved between search and booking** — Atlas reports the change itself;
+  the card shows old and new, and nothing proceeds without a fresh decision.
+- **Offer expired** — the CLI answers `terminal_error`/`OFFER_EXPIRED`, which
+  the app surfaces as a failed step rather than a green tick.
+- **A provider is down** — the card says which source had nothing. It will not
+  substitute a stock photograph or an invented price.
+- **RapidAPI quota exhausted** — saved prices are still served, explicitly
+  labelled stale, with the reason.
+- **An expired passport** — Atlas rejects it and names the field; the form says
+  so in words rather than marking a box the traveller cannot see.
 
 ## Project Structure
 
 ```
-waypoint/
-├── src/
-│   ├── cli/                    # Atlas CLI wrapper
-│   │   ├── wrapper.py          # Subprocess execution
-│   │   ├── envelope.py         # JSON envelope parser
-│   │   └── errors.py           # Error taxonomy
-│   ├── agent/                  # Agent orchestration
-│   │   ├── search.py           # Search & ranking engine
-│   │   ├── checkpoint.py       # Checkpoint state machine
-│   │   ├── audit.py            # Audit trail
-│   │   └── reasoning.py        # Qwen integration
-│   ├── ui/                     # Web interface
-│   │   ├── app.py              # Flask server
-│   │   └── templates/          # HTML templates
-│   └── parser/                 # Email parser
-│       └── email_parser.py     # Cancellation email parser
-├── tests/                      # Test suite
-├── requirements.txt            # Python dependencies
-├── run.py                      # Main entry point
-└── README.md                   # This file
+src/
+├── agent/
+│   ├── trip_agent.py       the tool-calling loop, and its system prompt
+│   ├── session.py          conversation memory, trimmed by whole turns
+│   ├── api_tracker.py      what each provider cost, per call
+│   └── flight_status.py    live delay lookups
+├── tools/
+│   ├── provenance.py       every record carries where it came from
+│   ├── atlas_tool.py       flights: search, verify, price, baggage, order
+│   ├── hotel_rates_tool.py Booking.com rates (tax included, fetched live)
+│   ├── places_tool.py      OSM geocoding, airports, attractions
+│   ├── imagery_tool.py     real photographs, or none at all
+│   ├── mrz.py              passport machine-readable zone + check digits
+│   └── locale_tool.py      where the traveller is
+├── cli/wrapper.py          the Atlas CLI, matched to its real flags
+└── ui/
+    ├── app.py              Flask routes
+    └── agent-app/          the built React UI (source in web/)
+
+web/                        React + Vite source
+scripts/                    demo recording, narration, fixtures
+tests/api_smoke.py          every provider and endpoint, end to end
 ```
 
 ## Key Design Decisions
 
-1. **Never auto-approve checkpoints** — Always explicit user action
+1. **Never invent** — a tool that cannot answer says so
 2. **Never retry uncertain payments** — Mark indeterminate and stop
 3. **Never persist passenger details** in logs (one-time input only)
 4. **Treat all IDs as opaque** — Never parse, reformat, or regenerate
 5. **Branch on envelope `code`** — Not HTTP status or exit codes
 6. **Sandbox data never drives real decisions** — Clear warning in UI
 
-## Limitations (Current Release)
+## Limitations
 
-- **Forward booking only**: Cannot cancel, refund, or change existing bookings
-- **Payment**: Atlas balance only (no credit card support)
-- **After-sales**: No support for refunds, cancellations, or changes
-- **Scope**: Handles replacement booking, not original cancellation
+- **Payment is not taken here** — by design. The order is settled on Atlas from
+  an Atlas account balance; Waypoint hands over the reference and stops.
+- **Stays are not booked** — every one links out to the listing its rate came
+  from. No rooms are held.
+- **Forward booking only** — no cancellations, refunds or changes.
+- **Hotel availability comes from the provider** — Booking.com's search endpoint
+  returns indicative room rates that do not vary with party size, and can list a
+  property its own site shows as unavailable on those dates.
+- **Not deployed** — runs locally; see the Alibaba Cloud TODO above.
 
-These limitations are explicit in the UX rather than hidden.
+Each of these is stated in the UI rather than hidden.
 
 ## Testing
 
 ```bash
-# Run tests
-python3.12 -m pytest tests/
-
-# Run with coverage
-python3.12 -m pytest tests/ --cov=src
+# Every provider and endpoint, end to end, against live APIs
+venv/bin/python tests/api_smoke.py stack endpoints
 ```
 
 ## Deployment
@@ -297,7 +267,13 @@ docker build -t waypoint .
 docker run -p 8000:8000 --env-file .env waypoint
 ```
 
-### Alibaba Cloud ECS (planned)
+### Alibaba Cloud ECS (planned — not yet deployed)
+
+**Why it is still a TODO:** Playwright's Chromium, which takes the hotel
+photographs, peaks at roughly 450MB. That needs a 2GB instance to be safe,
+which is above the free tier — and the app changes daily right now, so the
+running cost is not yet worth it. Everything below is the intended path, not a
+description of something already live.
 
 Use a **Singapore** region. The app depends on OpenAI, ElevenLabs and RapidAPI
 for nearly every request, and those are blocked or unreliable from mainland
@@ -376,4 +352,7 @@ Apache-2.0
 
 ## Credits
 
-Built with Qoder for the Atlas hackathon. The CLI wrapper, checkpoint state machine, and UI were scaffolded using Qoder's code generation capabilities.
+Built for the Alibaba Cloud x Atlas Agentic AI Hackathon, Singapore.
+Flights and booking by [Atlas](https://atlaslovestravel.com/); hotel rates from
+Booking.com via RapidAPI; places and attractions from OpenStreetMap; voice by
+ElevenLabs.

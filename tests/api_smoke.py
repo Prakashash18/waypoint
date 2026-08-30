@@ -329,12 +329,10 @@ def test_endpoints():
     print("\n── Flask endpoints ───────────────────────────────────────")
     base = os.getenv('WAYPOINT_URL', 'http://localhost:2000')
     checks = [
-        ('GET /api/state', 'get', '/api/state', None),
         ('GET /api/tools', 'get', '/api/tools', None),
         ('GET /api/sources', 'get', '/api/sources', None),
         ('GET /api/flight-delays', 'get', '/api/flight-delays?airport=SIN', None),
         ('GET /api/tracker/summary', 'get', '/api/tracker/summary', None),
-        ('POST /api/chat', 'post', '/api/chat', {'message': 'hello'}),
         ('POST /api/agent/plan', 'post', '/api/agent/plan',
          {'request': 'One night in Singapore on ' + DEPART + ', 1 adult, cheapest option'}),
     ]
