@@ -29,6 +29,7 @@ def main():
               key=os.path.getmtime)
     marks = {m['label']: m['at'] for m in
              json.load(open(os.path.join(VID, 'marks.json')))}
+    intro_cues = json.load(open(os.path.join(VID, 'intro_cues.json')))
 
     intro_mp4 = os.path.join(VID, 'intro.mp4')
     if not os.path.exists(intro_mp4):
@@ -53,8 +54,9 @@ def main():
     # are long — which is exactly what happened — so a line never starts before
     # the previous one has finished, plus a breath.
     ANCHORS = [
-        ('01-intro',    None),
-        ('01b-booking', 'INTRO:11.0'),   # on the lanes, inside the opening
+        ('01a-problem',  'INTRO'),
+        ('01b-claim',    'INTRO'),
+        ('01c-booking',  'INTRO'),
         ('02-ask',      'the empty state'),
         ('03-work',     'HUD streaming real calls'),
         ('04-cards',    'three trips priced'),
@@ -65,15 +67,14 @@ def main():
         ('09-passport', 'who is flying'),
         ('10-order',    'ORDER CREATED — seats held'),
     ]
-    GAP = 0.45
+    GAP = 0.2
 
     CUES, free = [], 0.0
     for name, label in ANCHORS:
-        if label is None:
-            anchor = 0.0
-        elif isinstance(label, str) and label.startswith('INTRO:'):
-            # A cue placed inside the opening animation, not against the app.
-            anchor = float(label.split(':')[1])
+        if label == 'INTRO':
+            # Placed by the opening's own generated timeline, so the voice and
+            # the panel it belongs to start together.
+            anchor = intro_cues[name]
         else:
             anchor = intro_len + marks[label]
         at = max(anchor, free)

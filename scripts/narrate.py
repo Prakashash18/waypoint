@@ -18,11 +18,14 @@ KEY = os.getenv('ELEVENLABS_API_KEY')
 VOICE = os.getenv('WAYPOINT_NARRATOR', 'EXAVITQu4vr4xnSDxMaL')   # Sarah — warm, calm
 
 SEGMENTS = [
-    ('01-intro',
-     'Most travel agents stop at the recommendation. This one stops at your wallet. '
-     'Waypoint plans a whole trip by voice, books it for real, '
-     'and refuses to invent a single thing along the way.'),
-    ('01b-booking',
+    # The opening is split a line per beat, so each panel can be held for
+    # exactly as long as its own sentence takes to say.
+    ('01a-problem',
+     'Most travel agents stop at the recommendation.'),
+    ('01b-claim',
+     'This one stops at your wallet. A voice-first agent that plans a whole trip, '
+     'books it for real, and refuses to invent a single thing along the way.'),
+    ('01c-booking',
      'Two things get booked, and neither by guesswork. Flights go through Atlas — '
      'it verifies the live fare, prices the baggage, and holds the seats. '
      'Stays link straight to the listing the rate was quoted on, '
