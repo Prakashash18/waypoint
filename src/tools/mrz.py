@@ -166,11 +166,23 @@ def _normalise(lines: List[str], width: int) -> List[str]:
 def parse(lines: List[str]) -> MRZResult:
     """Parse TD3 or TD2 MRZ lines into booking fields, verifying every digit."""
     raw = [ln for ln in (lines or []) if (ln or '').strip()]
-    if len(raw) < 2:
+
+    # Keep only lines that look like a machine-readable zone. A transcriber
+    # will wrap its answer in a markdown fence or add a stray caption, and a
+    # '```' counted as a line silently shifted the whole read by one.
+    def looks_like_mrz(ln: str) -> bool:
+        text = ln.strip().upper().replace(' ', '')
+        if len(text) < 28:
+            return False
+        good = sum(1 for ch in text if ch in _VALUES)
+        return good / len(text) >= 0.9
+
+    candidates = [ln for ln in raw if looks_like_mrz(ln)]
+    if len(candidates) < 2:
         return MRZResult(False, error='Need the two lines from the bottom of the page.')
 
-    # Take the last two lines: a TD1 or a stray caption may precede them.
-    raw = raw[-2:]
+    # Take the last two: a TD1 zone or a caption may precede them.
+    raw = candidates[-2:]
     width = 44 if max(len(r.strip()) for r in raw) > 38 else 36
     fmt = 'TD3' if width == 44 else 'TD2'
     l1, l2 = _normalise(raw, width)

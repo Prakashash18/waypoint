@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "waypoint",
+      "url": "http://localhost:2000",
+      "port": 2000
+    },
+    {
+      "name": "waypoint-flask",
+      "runtimeExecutable": "venv/bin/python",
+      "runtimeArgs": ["run.py"],
+      "port": 2000,
+      "autoPort": false
+    },
+    {
+      "name": "waypoint-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "web", "run", "dev"],
+      "port": 5173,
+      "autoPort": false
+    }
+  ]
+}

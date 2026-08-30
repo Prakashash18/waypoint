@@ -1893,25 +1893,48 @@ def agent_app_asset(path):
     return send_from_directory(_AGENT_APP_DIR, 'index.html')
 
 
-# ── SPA Catch-All (must be LAST route) ──────────────────────────────
+@app.route('/api/health')
+def api_health():
+    """Liveness for the container healthcheck.
+
+    Both the Dockerfile and render.yaml have always probed this path, but no
+    such route existed: the catch-all answered with an HTML page and a 200, so
+    the check passed however broken the app was. It reports process liveness
+    and whether the UI was actually built — deliberately making no upstream
+    call, because a healthcheck running every 30s must not spend metered quota
+    or fail over someone else's outage.
+    """
+    built = os.path.exists(os.path.join(_AGENT_APP_DIR, 'index.html'))
+    return jsonify({
+        'ok': built,
+        'ui_built': built,
+        'sources_configured': {
+            'openai': bool(os.getenv('OPENAI_API_KEY')),
+            'rapidapi': bool(os.getenv('RAPIDAPI_KEY')),
+            'elevenlabs': bool(os.getenv('ELEVENLABS_API_KEY')),
+        },
+    }), (200 if built else 503)
+
+
+# ── Catch-All (must be LAST route) ──────────────────────────────────
 
 import os as _os
 
-_SPA_DIR = _os.path.join(_os.path.dirname(__file__), 'spa-build')
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_spa(path):
-    """Serve the React SPA for all non-API routes"""
-    from flask import send_from_directory
-    # If a specific file exists (JS, CSS, assets), serve it
-    if path and _os.path.exists(_os.path.join(_SPA_DIR, path)):
-        return send_from_directory(_SPA_DIR, path)
-    # Otherwise serve index.html (React Router handles routing)
-    if _os.path.exists(_os.path.join(_SPA_DIR, 'index.html')):
-        return send_from_directory(_SPA_DIR, 'index.html')
-    # Fallback to template if SPA not built
-    return render_template('index.html')
+    """Send anything unclaimed to the app.
+
+    An earlier build under src/ui/spa-build used to answer here, so opening the
+    site root showed that older interface rather than this one — confusing on
+    its own, and actively misleading when a preview or a shared link lands on
+    "/". The current UI lives at /app and its assets are absolute under
+    /app/assets, so a redirect is enough. The old build is left on disk,
+    unserved, rather than deleted.
+    """
+    from flask import redirect
+    return redirect('/app', code=302)
 
 
 if __name__ == '__main__':
