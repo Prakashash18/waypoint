@@ -350,6 +350,31 @@ Branch on `code`, not `status`. All IDs are opaque strings.
 
 Apache-2.0
 
+## Built with
+
+Two AI tools, used for what each is good at.
+
+**[Qoder](https://qoder.com/)** scaffolded the project: the first pass at the
+Atlas CLI wrapper, the initial Flask surface and the early UI. Going from an
+empty directory to something that ran end to end took hours rather than days,
+and that head start is what made the rest of the work possible inside a
+hackathon.
+
+**[Claude](https://claude.com/claude-code)** did the work that only shows up
+when you run it against live systems: the tool-calling agent loop, the
+provenance rule that no record may exist without its source, and a long tail of
+corrections that a scaffold cannot know about — that `order create` reads its
+passengers from stdin rather than a flag, that `required_fields` differs per
+offer, that Booking.com quotes prices before tax, that an offer's
+`terminal_error` is not a success. Also the passport reader, the current UI, and
+the demo film.
+
+The division was natural rather than planned: **Qoder covers breadth quickly,
+Claude closes the gap between "it runs" and "it is right"**. Neither would have
+produced this alone in the time available — the scaffold had no way to discover
+what the real APIs actually do, and starting from nothing would have spent the
+whole hackathon on structure.
+
 ## Credits
 
 Built for the Alibaba Cloud x Atlas Agentic AI Hackathon, Singapore.
