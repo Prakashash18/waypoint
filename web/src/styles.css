@@ -1216,3 +1216,4 @@ img { max-width: 100%; }
   .glyph.is-live .g-cells rect { opacity: .6; }
   .glyph.is-live .g-chain      { stroke-dashoffset: 0; }
 }
+.paxrow input.code { text-transform: uppercase; letter-spacing: .06em; max-width: 8ch; }

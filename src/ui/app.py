@@ -969,15 +969,20 @@ def booking_order():
 
     try:
         res = cli.order_create(booking_id, {'passengers': passengers, 'contact': contact})
-        if res.code == 'PASSENGER_INFO_INVALID':
-            # Atlas names the fields it rejected; pass them straight through so
-            # the form can mark them rather than saying "something is wrong".
+
+        # An order exists only when Atlas says it is waiting to be paid, or
+        # hands back an order number. Every other answer — including the
+        # action_required codes that are not failures — means no order was
+        # created, and reporting one would be a lie the traveller acts on.
+        created = (res.code == 'PAYMENT_CONFIRMATION_REQUIRED'
+                   or bool(res.get_data('order_no', '')))
+        if not created:
+            # Atlas names the fields it rejected or still wants; pass them
+            # through so the form can mark them rather than saying
+            # "something is wrong".
             return jsonify({'success': False, 'error': res.message,
                             'code': res.code,
                             'fields': (res.details or {}).get('fields', [])}), 200
-        if res.is_error() and res.code != 'PAYMENT_CONFIRMATION_REQUIRED':
-            return jsonify({'success': False, 'error': res.message,
-                            'code': res.code}), 200
 
         return jsonify({
             'success': True,
@@ -987,6 +992,12 @@ def booking_order():
             'payment_deadline': res.get_data('payment_deadline', ''),
             'payment_confirmation_id': res.get_data('payment_confirmation_id', ''),
             'payment_summary': res.get_data('payment_summary', {}) or {},
+            # The order lives with Atlas, not the airline, and is settled from
+            # an ATRIP account balance. This is the only correct place to send
+            # someone to inspect or pay it — and when Atlas does not return it
+            # there is no link to give. Deriving one is how a traveller ends up
+            # at an airline that has never heard of their booking.
+            'order_url': res.get_data('order_url', '') or '',
         })
     except Exception as exc:
         app.logger.exception('order creation failed')

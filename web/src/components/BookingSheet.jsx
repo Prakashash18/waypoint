@@ -73,6 +73,13 @@ export default function BookingSheet({ flight, onClose, voice }) {
   const bagStep = (steps || []).find((s) => s.key === 'baggage')
   const bagOptions = bagStep?.options || []
   const travellers = prep?.travelers || []
+  // Atlas states per offer which fields it needs — some routes want passport
+  // details and nationality, others only a name and date of birth. Asking for
+  // a fixed set meant either demanding documents nobody needed, or offering no
+  // way to supply the ones that were required.
+  const required = prep?.required_fields || []
+  const needsDoc = required.some((f) => f.startsWith('document.'))
+  const needsNat = needsDoc || required.includes('nationality')
   const currency = flight?.currency || ''
 
   const chosenBag = useMemo(
@@ -163,12 +170,21 @@ export default function BookingSheet({ flight, onClose, voice }) {
       if (!NAME_RE.test(p.name.trim())) bad.push(`passengers[${i}].name`)
       if (p.gender !== 'M' && p.gender !== 'F') bad.push(`passengers[${i}].gender`)
       if (!ISO_DATE_RE.test(p.birthday)) bad.push(`passengers[${i}].birthday`)
+      if (needsNat && !/^[A-Za-z]{2}$/.test(p.nationality || ''))
+        bad.push(`passengers[${i}].nationality`)
+      if (needsDoc) {
+        const d = p.document || {}
+        if (!d.number) bad.push(`passengers[${i}].document.number`)
+        if (!/^[A-Za-z]{2}$/.test(d.issuing_country || ''))
+          bad.push(`passengers[${i}].document.issuing_country`)
+        if (!ISO_DATE_RE.test(d.expires || '')) bad.push(`passengers[${i}].document.expires`)
+      }
     })
     if (!NAME_RE.test(contact.name.trim())) bad.push('contact.name')
     if (contact.email && !EMAIL_RE.test(contact.email)) bad.push('contact.email')
     if (contact.mobile && !MOBILE_RE.test(contact.mobile)) bad.push('contact.mobile')
     return bad
-  }, [people, contact])
+  }, [people, contact, needsDoc, needsNat])
 
   const placeOrder = useCallback(async () => {
     if (localProblems.length) { setBadFields(localProblems); return }
@@ -186,9 +202,16 @@ export default function BookingSheet({ flight, onClose, voice }) {
             passenger_type: 'adult',
             gender: p.gender,
             birthday: p.birthday,
-            // Only sent when a passport actually supplied them.
-            ...(p.nationality ? { nationality: p.nationality } : {}),
-            ...(p.document?.number ? { document: p.document } : {}),
+            // Sent when the offer asks for them, or when a passport supplied them.
+            ...(p.nationality ? { nationality: p.nationality.toUpperCase() } : {}),
+            ...(p.document?.number ? {
+              document: {
+                type: p.document.type || 'PP',
+                number: p.document.number,
+                issuing_country: (p.document.issuing_country || '').toUpperCase() || undefined,
+                expires: p.document.expires || undefined,
+              },
+            } : {}),
           })),
           contact: {
             name: contact.name.trim().toUpperCase(),
@@ -227,8 +250,9 @@ export default function BookingSheet({ flight, onClose, voice }) {
     name: 'the name, as FAMILY/GIVEN',
     gender: 'the gender',
     birthday: 'the date of birth',
-    'document.expires': 'the passport expiry — this document has expired',
+    'document.expires': 'the passport expiry date',
     'document.number': 'the passport number',
+    'document.type': 'the document type',
     'document.issuing_country': 'the country that issued the passport',
     nationality: 'the nationality',
   }
@@ -355,6 +379,8 @@ export default function BookingSheet({ flight, onClose, voice }) {
               <p className="fine">
                 Names must match the passport, in the airline's own format:
                 family name, a slash, then given names — <code>TAN/WEI MING</code>.
+                {needsDoc && ' This route also needs passport details for each traveller — '
+                  + 'scanning one fills them all in.'}
               </p>
 
               {people.map((p, i) => (
@@ -405,6 +431,48 @@ export default function BookingSheet({ flight, onClose, voice }) {
                       </select>
                     </label>
                   </div>
+
+                  {needsNat && (
+                    <div className="paxrow-pair">
+                      <label>
+                        <span>Nationality</span>
+                        <input type="text" maxLength={2} placeholder="SG"
+                               value={p.nationality || ''}
+                               className={`code${marks(`passengers[${i}].nationality`)}`}
+                               onChange={(e) => setPeople((ps) => ps.map((x, j) => (
+                                 j === i ? { ...x, nationality: e.target.value.toUpperCase() } : x)))} />
+                      </label>
+                      {needsDoc && (
+                        <label>
+                          <span>Passport number</span>
+                          <input type="text" value={p.document?.number || ''}
+                                 className={marks(`passengers[${i}].document.number`)}
+                                 onChange={(e) => setPeople((ps) => ps.map((x, j) => (
+                                   j === i ? { ...x, document: { ...(x.document || {}), type: 'PP', number: e.target.value.toUpperCase() } } : x)))} />
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  {needsDoc && (
+                    <div className="paxrow-pair">
+                      <label>
+                        <span>Issued by</span>
+                        <input type="text" maxLength={2} placeholder="SG"
+                               value={p.document?.issuing_country || ''}
+                               className={`code${marks(`passengers[${i}].document.issuing_country`)}`}
+                               onChange={(e) => setPeople((ps) => ps.map((x, j) => (
+                                 j === i ? { ...x, document: { ...(x.document || {}), issuing_country: e.target.value.toUpperCase() } } : x)))} />
+                      </label>
+                      <label>
+                        <span>Passport expires</span>
+                        <input type="date" value={p.document?.expires || ''}
+                               className={marks(`passengers[${i}].document.expires`)}
+                               onChange={(e) => setPeople((ps) => ps.map((x, j) => (
+                                 j === i ? { ...x, document: { ...(x.document || {}), expires: e.target.value } } : x)))} />
+                      </label>
+                    </div>
+                  )}
                 </fieldset>
               ))}
 
@@ -482,9 +550,9 @@ export default function BookingSheet({ flight, onClose, voice }) {
               </ul>
               <p className="fine booking-truth">
                 <strong>This order is real and is holding your seats.</strong> The last
-                step is payment, and Waypoint does not take it. Paying is yours to
-                authorise on the airline's own site, where your card details go to
-                them and to nobody else — not to us, and not through an agent.
+                step is payment, and Waypoint does not take it. The order is held
+                by Atlas and settled from your own Atlas account balance — so you
+                authorise it there, not here, and no agent moves money for you.
               </p>
 
               <div className="payoff">
@@ -501,16 +569,27 @@ export default function BookingSheet({ flight, onClose, voice }) {
                     </button>
                   </li>
                   <li>
-                    <span>Open {flight.airline_name || 'the airline'}'s own booking page
-                          and pay {money(order.total_price, order.currency || currency)}</span>
-                    {/* A guessed airline URL is exactly the kind of confident
-                        wrong answer this app avoids, so this searches rather
-                        than pretending to know the address. */}
-                    <a className="btn-primary" target="_blank" rel="noopener noreferrer"
-                       href={`https://duckduckgo.com/?q=${encodeURIComponent(
-                         `${flight.airline_name || flight.airline || ''} manage my booking pay`)}`}>
-                      Find the airline's payment page
-                    </a>
+                    <span>
+                      Open the order on Atlas and settle
+                      {' '}{money(order.total_price, order.currency || currency)} there
+                    </span>
+                    {/* The order is held by Atlas and paid from an ATRIP account
+                        balance — not with a card at the airline, which has no
+                        record of it. Atlas returns the order's own address, and
+                        when it does not, there is no link to give: deriving one
+                        would send a traveller somewhere that cannot help them. */}
+                    {order.order_url ? (
+                      <a className="btn-primary" target="_blank" rel="noopener noreferrer"
+                         href={order.order_url}>
+                        Open this order on Atlas
+                      </a>
+                    ) : (
+                      <span className="fine">
+                        Atlas did not return a link for this order. Quote the
+                        reference above to settle it — we will not guess an
+                        address and send you somewhere that cannot find it.
+                      </span>
+                    )}
                   </li>
                 </ol>
                 {deadline && (
