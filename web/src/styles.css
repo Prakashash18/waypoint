@@ -894,3 +894,24 @@ img { max-width: 100%; }
 .booking-steps li.is-pending { color: var(--faint); font-size: 14px; align-items: center; gap: 9px; }
 /* Break the call name after the dot, not through the middle of an identifier. */
 .trace-body code, .hud-call { overflow-wrap: break-word; word-break: normal; }
+
+/* ── what a label means, and which dates it covers ───────────── */
+
+.combo-label-row { display: flex; align-items: center; gap: 7px; }
+.combo-info {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: none; padding: 0;
+  background: transparent; border: 0; border-radius: 999px;
+  color: var(--faint); cursor: pointer;
+}
+.combo-info:hover, .combo-info[aria-expanded="true"] {
+  color: var(--accent); background: var(--accent-soft);
+}
+.combo-explain {
+  margin: 0; padding: 11px 13px; font-size: 14px; line-height: 1.5;
+  color: var(--dim); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+.combo-dates { margin: 0; font-size: 14px; color: var(--dim);
+  font-variant-numeric: tabular-nums; }
+.chosen-dates { display: block; margin-top: 3px; font-size: 14px; color: var(--dim); }

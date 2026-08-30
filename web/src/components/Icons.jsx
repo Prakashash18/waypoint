@@ -41,6 +41,12 @@ export const Crosshair = ({ size = 15 }) => (
   </svg>
 )
 
+export const Info = ({ size = 14 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} {...base} strokeWidth={1.9} aria-hidden="true">
+    <circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.6v.1" />
+  </svg>
+)
+
 export const Close = ({ size = 18 }) => (
   <svg viewBox="0 0 24 24" width={size} height={size} {...base} strokeWidth={1.9} aria-hidden="true">
     <path d="M6 6l12 12M18 6L6 18" />

@@ -1,5 +1,6 @@
-import { money, clockTime, duration } from '../lib/format'
-import { Plane, External } from './Icons'
+import { useState } from 'react'
+import { money, clockTime, duration, dateRange } from '../lib/format'
+import { Plane, Info } from './Icons'
 
 /** One whole trip: the flight, the stay, and what the two cost together.
  *
@@ -8,11 +9,26 @@ import { Plane, External } from './Icons'
  */
 export default function ComboCard({ combo, onOpen, onChoose, onAsk }) {
   const { hotel, flight, currency } = combo
+  const [explaining, setExplaining] = useState(false)
+
+  // The label is a rule; say which one, on demand rather than in everyone's way.
+  const dates = dateRange(combo.check_in || hotel.check_in,
+                          combo.check_out || hotel.check_out)
 
   return (
     <article className="combo">
       <header className="combo-head">
-        <span className="combo-label">{combo.label}</span>
+        <div className="combo-label-row">
+          <span className="combo-label">{combo.label}</span>
+          {combo.explain && (
+            <button type="button" className="combo-info"
+                    aria-expanded={explaining}
+                    aria-label={`What ${combo.label.toLowerCase()} means`}
+                    onClick={() => setExplaining((v) => !v)}>
+              <Info />
+            </button>
+          )}
+        </div>
         <p className="combo-total">
           <span className="serif">{money(combo.total, currency, { round: true })}</span>
           <span className="combo-unit">
@@ -20,6 +36,10 @@ export default function ComboCard({ combo, onOpen, onChoose, onAsk }) {
             {combo.nights ? `${combo.passengers > 1 ? ' · ' : ''}${combo.nights} nights` : ''}
           </span>
         </p>
+        {dates && <p className="combo-dates">{dates}</p>}
+        {explaining && combo.explain && (
+          <p className="combo-explain" role="note">{combo.explain}</p>
+        )}
       </header>
 
       <button type="button" className="combo-stay" onClick={() => onOpen(hotel)}>

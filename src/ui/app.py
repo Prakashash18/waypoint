@@ -1339,11 +1339,20 @@ def _combos_from(result: dict) -> list:
         return score / h['total_price'] if h['total_price'] else 0
     best_value = max(rated, key=value) if rated else None
 
+    # Each label is a rule, and a traveller cannot judge the pick without
+    # knowing which rule produced it — "cheapest" and "best value" disagree on
+    # purpose, and the difference is the whole point of showing three.
     picks = []
-    for hotel, label, why in (
-        (best_value, 'Best value', 'the best reviews for the money'),
-        (cheapest, 'Cheapest', 'the lowest total we found'),
-        (best_rated, 'Best reviewed', 'the highest-rated stay available'),
+    for hotel, label, why, explain in (
+        (best_value, 'Best value', 'the best reviews for the money',
+         'The highest guest score for each dollar spent. Not the cheapest — it '
+         'is the one giving you the most for the money.'),
+        (cheapest, 'Cheapest', 'the lowest total we found',
+         'The lowest total of flights and stay together. Nothing else is '
+         'weighed, so it may have few reviews or none.'),
+        (best_rated, 'Best reviewed', 'the highest-rated stay available',
+         'The highest guest score we found, whatever it costs. Check the review '
+         'count — a perfect ten from one guest is thinner than 8.8 from 255.'),
     ):
         if hotel is None or any(p['hotel']['hotel_id'] == hotel.get('hotel_id') for p in picks):
             continue
@@ -1352,6 +1361,12 @@ def _combos_from(result: dict) -> list:
         picks.append({
             'label': label,
             'why': why,
+            'explain': explain,
+            # The dates the price actually covers, so the card is unambiguous.
+            'check_in': hotel.get('check_in'),
+            'check_out': hotel.get('check_out'),
+            'depart': ((flight or {}).get('outbound') or {}).get('depart', '')[:10] or None,
+            'return_date': ((flight or {}).get('return_leg') or {}).get('depart', '')[:10] or None,
             'hotel': hotel,
             'flight': flight,
             'hotel_price': hotel['total_price'],

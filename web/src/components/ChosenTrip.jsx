@@ -1,4 +1,4 @@
-import { money, clockTime, shortDate, duration } from '../lib/format'
+import { money, clockTime, shortDate, duration, dateRange } from '../lib/format'
 import { Back, External, Mic, Plane } from './Icons'
 
 /** Step 2: the one trip being considered, opened up.
@@ -39,6 +39,9 @@ export default function ChosenTrip({ combo, onBack, onBookFlight, onOpenStay, ot
               <span>
                 {combo.passengers > 1 ? `for ${combo.passengers}` : ''}
                 {combo.nights ? `${combo.passengers > 1 ? ' · ' : ''}${combo.nights} nights` : ''}
+              </span>
+              <span className="chosen-dates">
+                {dateRange(combo.check_in || hotel.check_in, combo.check_out || hotel.check_out)}
               </span>
             </p>
           </div>
