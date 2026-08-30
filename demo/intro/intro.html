@@ -1,0 +1,85 @@
+<meta charset="utf-8">
+<title>Waypoint — intro</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap');
+  :root{
+    --paper:#faf7f2; --ink:#241f1a; --dim:#6c6157; --faint:#938779;
+    --line:#e5ddd1; --accent:#b45332; --surface:#fffdfa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    width:1280px;height:800px;background:var(--paper);color:var(--ink);
+    font:400 20px/1.55 Inter,system-ui,sans-serif;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .slide{width:100%;height:100%;padding:78px 92px;display:flex;flex-direction:column;
+         opacity:0;animation:in .7s ease-out forwards}
+  @keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  .brand{display:flex;align-items:center;gap:11px;margin-bottom:auto}
+  .brand svg{color:var(--accent)}
+  .brand b{font:600 23px/1 Fraunces,Georgia,serif;letter-spacing:.01em}
+
+  h1{font:400 56px/1.08 Fraunces,Georgia,serif;letter-spacing:-.02em;
+     max-width:21ch;margin-bottom:18px}
+  h1 em{font-style:normal;color:var(--accent)}
+  .sub{font-size:22px;color:var(--dim);max-width:52ch;line-height:1.5}
+
+  .rule{height:1px;background:var(--line);margin:34px 0 28px}
+
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:36px;margin-bottom:auto}
+  .three h2{font:600 13px/1 Inter,sans-serif;letter-spacing:.13em;text-transform:uppercase;
+            color:var(--accent);margin-bottom:11px}
+  .three p{font-size:17.5px;color:var(--dim);line-height:1.52}
+  .three b{color:var(--ink);font-weight:600}
+
+  .foot{display:flex;justify-content:space-between;align-items:center;gap:28px;
+        padding-top:26px;border-top:1px solid var(--line);font-size:15px;color:var(--faint)}
+  .foot .stack{display:flex;gap:8px;flex-wrap:nowrap}
+  .foot .stack span{border:1px solid var(--line);border-radius:999px;padding:5px 12px;
+                    background:var(--surface);color:var(--dim);white-space:nowrap}
+  .foot .where{text-align:right;white-space:nowrap}
+</style>
+
+<div class="slide">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor"
+         stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 21s7-6.3 7-11.4A7 7 0 0 0 5 9.6C5 14.7 12 21 12 21z"/>
+      <circle cx="12" cy="9.5" r="2.4"/>
+    </svg>
+    <b>Waypoint</b>
+  </div>
+
+  <h1>Most travel agents stop at the recommendation.<br><em>This one stops at your wallet.</em></h1>
+  <p class="sub">A voice-first agent that plans a whole trip, then books it for real —
+     and refuses to invent a single thing along the way.</p>
+
+  <div class="rule"></div>
+
+  <div class="three">
+    <div>
+      <h2>It acts</h2>
+      <p>Verifies the live fare, prices baggage per leg, and creates a <b>real order
+         holding real seats</b> — not a link to somewhere else.</p>
+    </div>
+    <div>
+      <h2>It shows its work</h2>
+      <p>Every tool call visible as it runs: what was asked, what came back,
+         how long it took. <b>No black box.</b></p>
+    </div>
+    <div>
+      <h2>It won't make things up</h2>
+      <p>Every price and photograph carries its source. When one goes dark it
+         <b>says so</b> instead of guessing.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="stack">
+      <span>Atlas Flight APIs</span><span>Booking.com</span><span>OpenStreetMap</span>
+      <span>ElevenLabs</span><span>OpenAI</span>
+    </div>
+    <div class="where">Singapore · Alibaba Cloud &times; Atlas Agentic AI Hackathon</div>
+  </div>
+</div>
