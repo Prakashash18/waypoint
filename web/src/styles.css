@@ -533,3 +533,6 @@ img { max-width: 100%; }
   .hud-trail, .hud-plane { transition: none; }
 }
 .score.is-none span { color: var(--faint); font-size: 12px; }
+.btn-secondary.is-stop { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.btn-secondary.is-stop:hover { border-color: var(--bad); }
+.hud-step.is-stopping .hud-pulse { background: var(--bad); }

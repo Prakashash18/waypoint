@@ -54,7 +54,7 @@ function countOf(step) {
   return m ? Number(m[1]) : null
 }
 
-export default function AgentHUD({ steps, done }) {
+export default function AgentHUD({ steps, done, stopping = false }) {
   const [elapsed, setElapsed] = useState(0)
   const started = useRef(Date.now())
 
@@ -104,10 +104,12 @@ export default function AgentHUD({ steps, done }) {
         })}
 
         {!done && (
-          <li className="hud-step is-pending">
+          <li className={`hud-step is-pending${stopping ? ' is-stopping' : ''}`}>
             <span className="hud-glyph"><span className="hud-pulse" /></span>
             <span className="hud-label">
-              {calls.length ? 'Working out what to recommend' : 'Getting started'}
+              {stopping ? 'Stopping — finishing the call already in flight'
+                : calls.length ? 'Working out what to recommend'
+                : 'Getting started'}
             </span>
             <span className="hud-count">{elapsed.toFixed(1)}s</span>
           </li>

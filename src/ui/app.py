@@ -17,6 +17,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.cli import AtlasCLI
+from src.agent.session import sessions
 from src.agent import (
     SearchEngine, DisruptedItinerary, RankedOption,
     CheckpointManager, Checkpoint, CheckpointType, CheckpointDecision,
@@ -647,7 +648,8 @@ def agent_plan():
         if not brief:
             return jsonify({'success': False,
                             'error': 'request is required'}), 400
-        result = _agent().plan(brief, context=data.get('context'))
+        session = sessions.get_or_create(data.get('session_id'), data.get('user_id'))
+        result = _agent().plan(brief, context=data.get('context'), session=session)
         return jsonify({'success': True, 'packages': _packages_from(result),
                         'trip': _trip_from(result), **result})
     except Exception as e:
@@ -670,6 +672,7 @@ def agent_stream():
     data = request.json or {}
     brief = (data.get('request') or _brief_from_params(data)).strip()
     context = data.get('context') or data
+    session = sessions.get_or_create(data.get('session_id'), data.get('user_id'))
 
     events: "_queue.Queue" = _queue.Queue()
     DONE = object()
@@ -677,7 +680,7 @@ def agent_stream():
     def work():
         try:
             result = _agent().plan(
-                brief, context=context,
+                brief, context=context, session=session,
                 on_step=lambda step: events.put(('step', step.to_dict())))
             events.put(('done', {'packages': _packages_from(result),
                                  'trip': _trip_from(result), **result}))
@@ -691,8 +694,9 @@ def agent_stream():
 
     def generate():
         # Open immediately so the browser starts rendering rather than waiting
-        # on the first tool call, which can be a second or two away.
-        yield 'event: open\ndata: {}\n\n'
+        # on the first tool call, which can be a second or two away. The id goes
+        # out first so the client can interrupt this very run.
+        yield f"event: open\ndata: {json.dumps({'session_id': session.id})}\n\n"
         while True:
             try:
                 kind, payload = events.get(timeout=20)
@@ -707,6 +711,45 @@ def agent_stream():
                     headers={'Cache-Control': 'no-cache',
                              'Connection': 'keep-alive',
                              'X-Accel-Buffering': 'no'})
+
+
+@app.route('/api/agent/cancel', methods=['POST'])
+def agent_cancel():
+    """Interrupt a run in progress.
+
+    The agent checks between steps, so an in-flight upstream call finishes
+    first — stopping takes a second or two rather than being instant. Whatever
+    was already found is kept.
+    """
+    data = request.json or {}
+    session = sessions.get((data.get('session_id') or '').strip())
+    if session is None:
+        return jsonify({'success': False, 'error': 'no such session'}), 404
+    was_running = session.running
+    session.cancel()
+    return jsonify({'success': True, 'was_running': was_running,
+                    'session_id': session.id})
+
+
+@app.route('/api/session/<session_id>', methods=['GET', 'DELETE'])
+def session_state(session_id):
+    """What the agent remembers, or forget it."""
+    if request.method == 'DELETE':
+        sessions.drop(session_id)
+        return jsonify({'success': True, 'forgotten': session_id})
+
+    session = sessions.get(session_id)
+    if session is None:
+        return jsonify({'success': False, 'error': 'no such session'}), 404
+    return jsonify({'success': True, **session.summary()})
+
+
+@app.route('/api/session/<session_id>/preferences', methods=['POST'])
+def session_preferences(session_id):
+    """Record preferences the traveller states about themselves."""
+    session = sessions.get_or_create(session_id)
+    session.remember(**(request.json or {}))
+    return jsonify({'success': True, 'preferences': session.preferences})
 
 
 @app.route('/api/sources', methods=['GET'])

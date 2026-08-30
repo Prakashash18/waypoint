@@ -53,11 +53,13 @@ export async function speak(text, voiceId) {
  *  EventSource cannot POST, so this reads the SSE body off fetch directly.
  *  onStep fires per tool call; the promise resolves with the finished plan.
  */
-export async function planTripStreaming(request, context, onStep) {
+export async function planTripStreaming(request, context, onStep, opts = {}) {
+  const { sessionId, signal, onSession } = opts
   const res = await fetch('/api/agent/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ request, context }),
+    body: JSON.stringify({ request, context, session_id: sessionId }),
+    signal,
   })
   if (!res.ok || !res.body) throw new Error(`Request failed (${res.status})`)
 
@@ -90,7 +92,9 @@ export async function planTripStreaming(request, context, onStep) {
       let payload
       try { payload = JSON.parse(dataLines.join('\n')) } catch { continue }
 
-      if (event === 'step') onStep?.(payload)
+      // The id arrives first so the run can be interrupted while it runs.
+      if (event === 'open') onSession?.(payload.session_id)
+      else if (event === 'step') onStep?.(payload)
       else if (event === 'done') done = payload
       else if (event === 'error') failed = payload
     }
@@ -99,4 +103,30 @@ export async function planTripStreaming(request, context, onStep) {
   if (failed) throw new Error(failed.error || 'The agent failed')
   if (!done) throw new Error('The connection closed before the plan finished')
   return done
+}
+
+
+/** Interrupt a run. The agent checks between steps, so an upstream call
+ *  already in flight finishes first — expect a second or two. */
+export async function cancelPlan(sessionId) {
+  if (!sessionId) return null
+  const res = await fetch('/api/agent/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId }),
+  })
+  return res.ok ? res.json() : null
+}
+
+/** What the agent currently remembers for this session. */
+export async function getSession(sessionId) {
+  if (!sessionId) return null
+  const res = await fetch(`/api/session/${encodeURIComponent(sessionId)}`)
+  return res.ok ? res.json() : null
+}
+
+/** Make it forget. */
+export async function forgetSession(sessionId) {
+  if (!sessionId) return
+  await fetch(`/api/session/${encodeURIComponent(sessionId)}`, { method: 'DELETE' })
 }

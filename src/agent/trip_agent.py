@@ -27,6 +27,7 @@ from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from ..tools import ToolResult, ToolStatus, tool_registry
+from .session import Session
 from ..tools.provenance import Provenance, SourceReport, SourceStatus
 from .api_tracker import tracker
 
@@ -60,6 +61,9 @@ MONEY AND TIME — READ THIS BEFORE QUOTING ANYTHING
 - `price_total` on a flight offer is the fare for EVERYONE on the booking.
   `price_per_passenger` is the per-person fare. Say which one you mean. Calling
   a two-adult total a per-person price doubles the trip in the traveller's head.
+- A hotel's `total_price` covers the WHOLE STAY, not one night;
+  `price_per_night` is the nightly rate. Never report a total as a nightly rate:
+  a four-night total read as per-night quadruples the stay.
 - Quote in the traveller's own currency when one is known (see below), and name
   the currency. Never convert between currencies yourself — you have no rate.
   If a price came back in a different currency, say so plainly.
@@ -184,13 +188,17 @@ class TripAgent:
     # ── main loop ────────────────────────────────────────────────
 
     def plan(self, request: str, context: Optional[Dict[str, Any]] = None,
-             on_step: Optional[Callable[[TraceStep], None]] = None) -> Dict[str, Any]:
+             on_step: Optional[Callable[[TraceStep], None]] = None,
+             session: Optional[Session] = None) -> Dict[str, Any]:
         """Plan a trip from a natural-language request.
 
         Args:
             request: What the traveller asked for, in their own words.
             context: Optional known facts (origin, dates, budget, party size).
             on_step: Called after each trace step, for live streaming.
+            session: Carries the conversation forward. With one, a follow-up
+                like "compare the top two" continues from what the last run
+                found instead of searching again from nothing.
 
         Returns a dict with the answer, the trace, collected artifacts and
         a source report naming every provider consulted.
@@ -198,10 +206,22 @@ class TripAgent:
         started = time.time()
         trace: List[TraceStep] = []
         sources = SourceReport()
+
+        # Carry forward what the last run found, so a follow-up can talk about
+        # those hotels without re-fetching them.
+        prior = dict(session.artifacts) if session else {}
         artifacts: Dict[str, Any] = {
-            'hotels': [], 'flights': [], 'images': [], 'areas': [],
-            'windows': [], 'airports': [], 'locale': None,
+            'hotels': list(prior.get('hotels') or []),
+            'flights': list(prior.get('flights') or []),
+            'images': list(prior.get('images') or []),
+            'areas': list(prior.get('areas') or []),
+            'windows': list(prior.get('windows') or []),
+            'airports': list(prior.get('airports') or []),
+            'locale': prior.get('locale'),
         }
+        if session:
+            session.clear_cancel()
+            session.running = True
 
         if not self._api_key:
             return self._no_llm(request, sources, started)
@@ -226,11 +246,26 @@ class TripAgent:
                 f" use places__nearest_airports on these to pick a departure airport"
                 f" unless they named one."
             )
+        if session and session.preferences:
+            system += ("\n\nWHAT THIS TRAVELLER HAS TOLD YOU BEFORE\n"
+                       + json.dumps(session.preferences, default=str)
+                       + "\nApply these unless this request overrides them, and do not "
+                         "ask again for something already listed here.")
+
+        carried = self._describe_carried(artifacts)
+        if carried:
+            system += ("\n\nALREADY FOUND EARLIER IN THIS CONVERSATION\n" + carried +
+                       "\nWhen the traveller refers to these ('the top two', 'the second "
+                       "one', 'that hotel'), answer from them directly. Search again only "
+                       "if they ask for something genuinely new.")
+
         if context:
             system += f"\n\nKnown so far: {json.dumps(context, default=str)}"
 
+        history = [m for m in (session.messages if session else []) if m.get('role') != 'system']
         messages: List[Dict[str, Any]] = [
             {'role': 'system', 'content': system},
+            *history,
             {'role': 'user', 'content': request},
         ]
         tools = self.openai_tools()
@@ -238,6 +273,10 @@ class TripAgent:
         stopped = 'completed'
 
         for step in range(1, self.max_steps + 1):
+            if session and session.cancelled:
+                stopped = 'cancelled'
+                answer = answer or 'Stopped. Nothing below is invented — it is what I had found so far.'
+                break
             t0 = time.time()
             try:
                 response = client.chat.completions.create(
@@ -278,6 +317,13 @@ class TripAgent:
                 break
 
             for call in choice.tool_calls:
+                if session and session.cancelled:
+                    # The model expects a result for every call it made, so
+                    # answer the outstanding ones rather than leaving a gap.
+                    messages.append(self._tool_message(
+                        call.id, {'status': 'cancelled',
+                                  'message': 'the traveller interrupted'}))
+                    continue
                 result_msg, s = self._run_tool(call, step, artifacts, sources)
                 trace.append(s)
                 if on_step:
@@ -296,6 +342,20 @@ class TripAgent:
         self._ensure_imagery(answer, artifacts, sources, trace, on_step)
         answer = _clean_image_refs(answer)
 
+        if session:
+            session.running = False
+            session.artifacts = artifacts
+            if artifacts.get('locale'):
+                session.locale = artifacts['locale']
+            # Keep only the plain turns: replaying tool payloads would bloat
+            # every later request for little benefit.
+            session.messages = [
+                m for m in messages
+                if m.get('role') in ('user', 'assistant')
+                and m.get('content') and not m.get('tool_calls')
+            ]
+            session.trim()
+
         return {
             'request': request,
             'answer': answer,
@@ -307,7 +367,41 @@ class TripAgent:
             'stopped': stopped,
             'duration_ms': int((time.time() - started) * 1000),
             'model': self.model,
+            'session_id': session.id if session else None,
+            'preferences': dict(session.preferences) if session else {},
         }
+
+    @staticmethod
+    def _describe_carried(artifacts: Dict[str, Any]) -> str:
+        """A compact index of prior results, for the model to refer back to."""
+        lines = []
+        hotels = artifacts.get('hotels') or []
+        for i, h in enumerate(hotels[:8], 1):
+            if h.get('total_price') is not None:
+                nights = h.get('nights')
+                per = h.get('price_per_night')
+                price = (f"{h.get('currency','')} {h['total_price']:.2f} TOTAL"
+                         + (f" for {nights} nights" if nights else '')
+                         + (f" ({h.get('currency','')} {per:.2f} per night)" if per else ''))
+            else:
+                price = 'no price available'
+            score = (f", rated {h['review_score']}/10" if h.get('review_score')
+                     else ', no reviews yet')
+            lines.append(f"  hotel {i}: {h.get('name')} — {price}{score}"
+                         f" (hotel_id {h.get('hotel_id','?')})")
+        flights = artifacts.get('flights') or []
+        for f in flights[:3]:
+            lines.append(f"  flight: {f.get('flight_code')} {f.get('origin')}→"
+                         f"{f.get('destination')} {f.get('currency','')} "
+                         f"{f.get('price_total')} for {f.get('passengers')} "
+                         f"(offer_id {f.get('offer_id','?')})")
+        windows = artifacts.get('windows') or []
+        if windows:
+            best = min(windows, key=lambda w: w.get('price_total', 1e9))
+            lines.append(f"  {len(windows)} date windows priced; cheapest "
+                         f"{best.get('depart')} at {best.get('currency','')} "
+                         f"{best.get('price_total')}")
+        return '\n'.join(lines)
 
     def _resolve_locale(self, context: Optional[Dict[str, Any]],
                         artifacts: Dict[str, Any],
@@ -317,7 +411,7 @@ class TripAgent:
         The old agent assumed Kuala Lumpur and quoted USD at everyone. Doing
         this once up front costs one call and removes both assumptions.
         """
-        supplied = (context or {}).get('locale')
+        supplied = (context or {}).get('locale') or artifacts.get('locale')
         if isinstance(supplied, dict) and supplied.get('currency'):
             artifacts['locale'] = supplied
             return supplied

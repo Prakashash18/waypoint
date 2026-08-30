@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { planTripStreaming, getVoiceStatus } from './api'
+import { planTripStreaming, cancelPlan, forgetSession, getVoiceStatus } from './api'
 import { useVoice } from './hooks/useVoice'
 import { useLocale } from './hooks/useLocale'
 import { money } from './lib/format'
@@ -28,6 +28,12 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
   const [liveSteps, setLiveSteps] = useState([])
+  // Survives a reload so the conversation is not lost by refreshing the tab.
+  const [sessionId, setSessionId] = useState(() => {
+    try { return localStorage.getItem('waypoint.session') || null } catch { return null }
+  })
+  const [stopping, setStopping] = useState(false)
+  const abortRef = useRef(null)
   const [error, setError] = useState('')
   const [voiceReady, setVoiceReady] = useState(false)
   const [voiceOut, setVoiceOut] = useState(true)
@@ -51,7 +57,10 @@ export default function App() {
     if (!request || busy) return
     setBusy(true)
     setError('')
+    setStopping(false)
     setLiveSteps([])
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
       const context = {
         locale,
@@ -61,17 +70,43 @@ export default function App() {
       // Streamed so the HUD can show each lookup as it happens, rather than
       // holding a spinner for the whole 15-odd seconds.
       const data = await planTripStreaming(request, context,
-        (step) => setLiveSteps((prev) => [...prev, step]))
+        (step) => setLiveSteps((prev) => [...prev, step]),
+        {
+          sessionId,
+          signal: controller.signal,
+          onSession: (id) => {
+            setSessionId(id)
+            try { localStorage.setItem('waypoint.session', id) } catch { /* private mode */ }
+          },
+        })
       setResult(data)
       if (spoken && voiceOut) voice.say(spokenSummary(data))
       requestAnimationFrame(() =>
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     } catch (e) {
-      setError(e.message)
+      if (e.name !== 'AbortError') setError(e.message)
     } finally {
       setBusy(false)
+      setStopping(false)
+      abortRef.current = null
     }
-  }, [brief, busy, voice, voiceOut, locale, origin])
+  }, [brief, busy, voice, voiceOut, locale, origin, sessionId])
+
+  /** Interrupt the run. Whatever was found so far is kept. */
+  const stop = useCallback(async () => {
+    setStopping(true)
+    await cancelPlan(sessionId)
+  }, [sessionId])
+
+  /** Start over: the agent forgets this conversation. */
+  const startOver = useCallback(async () => {
+    await forgetSession(sessionId)
+    try { localStorage.removeItem('waypoint.session') } catch { /* private mode */ }
+    setSessionId(null)
+    setResult(null)
+    setLiveSteps([])
+    setBrief('')
+  }, [sessionId])
 
   const onTranscript = useCallback((text) => {
     setBrief(text)
@@ -95,6 +130,12 @@ export default function App() {
             <span className="chip origin-chip" title={origin.name}>
               <Crosshair /> {origin.iata}
             </span>
+          )}
+          {result && (
+            <button type="button" className="chip" onClick={startOver}
+                    title="The agent forgets this conversation and starts fresh">
+              Start over
+            </button>
           )}
           <button
             type="button"
@@ -148,10 +189,17 @@ export default function App() {
               {voiceReady && result && (
                 <VoiceButton voice={voice} onTranscript={onTranscript} disabled={busy} />
               )}
-              <button type="button" className="btn-primary" onClick={() => run()}
-                      disabled={busy || !brief.trim()}>
-                {busy ? 'Planning…' : 'Plan trip'}
-              </button>
+              {busy ? (
+                <button type="button" className="btn-secondary is-stop" onClick={stop}
+                        disabled={stopping}>
+                  {stopping ? 'Stopping…' : 'Stop'}
+                </button>
+              ) : (
+                <button type="button" className="btn-primary" onClick={() => run()}
+                        disabled={!brief.trim()}>
+                  Plan trip
+                </button>
+              )}
             </div>
           </div>
 
@@ -170,7 +218,7 @@ export default function App() {
 
         {(voice.error || error) && <p className="error" role="alert">{voice.error || error}</p>}
 
-        {busy && <AgentHUD steps={liveSteps} done={false} />}
+        {busy && <AgentHUD steps={liveSteps} done={false} stopping={stopping} />}
 
         {/* ── answer ──────────────────────────────────────── */}
         {result && (
