@@ -178,6 +178,25 @@ export default function App() {
     setStage('choose')
   }, [stage])
 
+  /** Bring a just-expanded panel out from behind the docked bar.
+   *
+   *  Expanding happens in place, so the content it reveals lands underneath
+   *  the overlay. The page can be scrolled, but nothing says so — it simply
+   *  looks cut off. This scrolls just far enough to clear the bar.
+   */
+  const revealBelowDock = useCallback((el) => {
+    if (!el) return
+    requestAnimationFrame(() => {
+      const dockTop = composeRef.current?.getBoundingClientRect().top ?? window.innerHeight
+      const hidden = el.getBoundingClientRect().bottom - dockTop
+      if (hidden <= 0) return
+      // Never scroll past the element's own top; seeing the start of it
+      // matters more than seeing the end.
+      const room = Math.max(0, el.getBoundingClientRect().top - 80)
+      window.scrollBy({ top: Math.min(hidden + 16, room + hidden), behavior: 'smooth' })
+    })
+  }, [])
+
   /** Interrupt the run. Whatever was found so far is kept. */
   const stop = useCallback(async () => {
     setStopping(true)
@@ -405,7 +424,10 @@ export default function App() {
             )}
 
             <details className="work" open={showWork}
-                     onToggle={(e) => setShowWork(e.currentTarget.open)}>
+                     onToggle={(e) => {
+                       setShowWork(e.currentTarget.open)
+                       if (e.currentTarget.open) revealBelowDock(e.currentTarget)
+                     }}>
               <summary>
                 How we got this — {result.tool_calls} lookups
                 {result.sources?.missing?.length ? `, ${result.sources.missing.length} gap` : ''}

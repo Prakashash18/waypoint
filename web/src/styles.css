@@ -892,3 +892,5 @@ img { max-width: 100%; }
 .booking-bags li { font-size: 13.5px; color: var(--dim); background: var(--paper);
   border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; }
 .booking-steps li.is-pending { color: var(--faint); font-size: 14px; align-items: center; gap: 9px; }
+/* Break the call name after the dot, not through the middle of an identifier. */
+.trace-body code, .hud-call { overflow-wrap: break-word; word-break: normal; }

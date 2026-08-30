@@ -1,3 +1,13 @@
+/** Markdown belongs in the answer, not in a log line. */
+function plain(text) {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /** What the agent actually called, in order. */
 export default function TracePanel({ trace, busy }) {
   if (busy && !trace.length) return <p className="muted">Working…</p>
@@ -7,14 +17,14 @@ export default function TracePanel({ trace, busy }) {
     <ol className="trace">
       {trace.map((step, i) => {
         const auto = (step.summary || '').startsWith('[auto]')
-        const summary = (step.summary || '').replace('[auto] ', '')
+        const summary = plain((step.summary || '').replace('[auto] ', ''))
         return (
           <li key={`${step.step}-${i}`} className="trace-step">
             <span className={`dot ${step.status}`} aria-hidden="true" />
             <div className="trace-body">
               {step.kind === 'tool_call' ? (
                 <>
-                  <code>{step.tool}.{step.capability}</code>
+                  <code>{step.tool}.<wbr />{step.capability}</code>
                   {auto && <span className="badge tiny">guaranteed</span>}
                 </>
               ) : (

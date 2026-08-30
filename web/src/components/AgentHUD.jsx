@@ -100,6 +100,7 @@ export default function AgentHUD({ steps, done, stopping = false }) {
           const args = argsOf(step)
           const auto = (step.summary || '').startsWith('[auto]')
           const said = (step.summary || '').replace('[auto] ', '')
+            .replace(/^#{1,6}\s*/gm, '').replace(/\*\*([^*]+)\*\*/g, '$1')
 
           return (
             <li key={`${key}-${i}`} className={`hud-step${live ? ' is-live' : ''}${bad ? ' is-empty' : ''}`}>
@@ -111,7 +112,7 @@ export default function AgentHUD({ steps, done, stopping = false }) {
                   <span className="hud-ms">{(step.duration_ms / 1000).toFixed(1)}s</span>
                 </p>
                 <p className="mono hud-call">
-                  {step.tool}.{step.capability}{args ? ` — ${args}` : ''}
+                  {step.tool}.<wbr />{step.capability}{args ? ` — ${args}` : ''}
                 </p>
                 {said && <p className="hud-said">{said}</p>}
               </div>
