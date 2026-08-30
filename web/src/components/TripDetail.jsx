@@ -102,7 +102,7 @@ export default function TripDetail({ combo, onClose, onAsk, onBookFlight }) {
           <div className="sheet-actions">
             {flight && (
               <button type="button" className="btn-primary" onClick={() => onBookFlight(flight)}>
-                <Mic size={16} /> Book the flight by voice
+                <Mic size={16} /> Book this flight
               </button>
             )}
             <a className="btn-secondary" href={hotel.booking_url || hotel.website || '#'}

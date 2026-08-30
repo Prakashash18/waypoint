@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 import Answer from './Answer'
 import { Mic } from './Icons'
 import ReplyCards from './ReplyCards'
+import { NEEDS } from './NeedsBar'
+
+const NEED_LABELS = Object.fromEntries(NEEDS.map((n) => [n.id, n.label]))
 
 /** The conversation, kept visible.
  *
@@ -27,7 +30,14 @@ export default function ChatThread({ messages, busy, onAsk, onOpenStay, onBookFl
       {messages.map((m, i) => (
         <div key={i} className={`turn is-${m.role}`}>
           {m.role === 'user' ? (
-            <p className="turn-said">{m.text}</p>
+            <div className="turn-said">
+              <p>{m.text}</p>
+              {m.needs?.length > 0 && (
+                <ul className="turn-needs" aria-label="Filtered for">
+                  {m.needs.map((n) => <li key={n}>{NEED_LABELS[n] || n}</li>)}
+                </ul>
+              )}
+            </div>
           ) : (
             <div className="turn-reply">
               <Answer text={m.text} busy={false} />

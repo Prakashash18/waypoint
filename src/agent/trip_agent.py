@@ -316,8 +316,20 @@ class TripAgent:
                   "mean this one. Use its lat/lon for anything nearby. Do not ask "
                   "which option they mean.")
 
+        selected_needs = [n for n in ((context or {}).get('needs') or []) if n]
+        if selected_needs:
+            system += (
+                f"\n\nTHE TRAVELLER HAS SWITCHED ON THESE NEEDS: "
+                f"{', '.join(selected_needs)}"
+                f"\nPass them as the `needs` parameter to hotel_rates__search_hotels "
+                f"so the provider filters on them, and say in your answer that the "
+                f"results are filtered this way. If the provider reports any of them "
+                f"as unsupported, say which — do not imply a stay was checked against "
+                f"something it never was.")
+
         if context:
-            trimmed = {k: v for k, v in context.items() if k not in ('seen', 'looking_at')}
+            trimmed = {k: v for k, v in context.items()
+                       if k not in ('seen', 'looking_at', 'needs')}
             system += f"\n\nKnown so far: {json.dumps(trimmed, default=str)}"
 
         history = [m for m in (session.messages if session else []) if m.get('role') != 'system']

@@ -120,7 +120,7 @@ function FlightCardInline({ card, onBook }) {
 
       {onBook && (
         <button type="button" className="rcard-book" onClick={() => onBook(card)}>
-          <Mic size={13} /> Book by voice
+          <Mic size={13} /> Book this flight
         </button>
       )}
     </div>

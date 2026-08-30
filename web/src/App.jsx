@@ -17,7 +17,7 @@ import AgentHUD from './components/AgentHUD'
 import Settings from './components/Settings'
 import ComboCard from './components/ComboCard'
 import TripDetail from './components/TripDetail'
-import NeedsBar from './components/NeedsBar'
+import NeedsBar, { NEEDS } from './components/NeedsBar'
 import ChatThread from './components/ChatThread'
 import ChosenTrip from './components/ChosenTrip'
 import TripStrip from './components/TripStrip'
@@ -92,11 +92,11 @@ export default function App() {
   }, [])
 
   const run = useCallback(async (text, { spoken = false } = {}) => {
-    let request = (text ?? brief).trim()
+    const request = (text ?? brief).trim()
     if (!request || busy) return
-    if (needs.length) {
-      request += `. Travelling needs: ${needs.join(', ')}.`
-    }
+    // Whatever was selected when this was asked, kept with the turn so the
+    // thread shows what the answer was actually filtered for.
+    const askedWith = [...needs]
     setBusy(true)
     setError('')
     setStopping(false)
@@ -104,7 +104,7 @@ export default function App() {
     setConversing(true)
     setPreviewDate(null)
     if (chosen) setStage('ask')
-    setMessages((prev) => [...prev, { role: 'user', text: request }])
+    setMessages((prev) => [...prev, { role: 'user', text: request, needs: askedWith }])
     setBrief('')
     if (!chosen) setStage('choose')
     const controller = new AbortController()
@@ -118,7 +118,7 @@ export default function App() {
         // memory, so a restart or a sleeping instance loses it — this lets a
         // follow-up still refer to the results on screen.
         seen: onScreen(result),
-        needs,
+        needs: askedWith,
         // Which trip is open. Without this, "that hotel" is ambiguous the
         // moment more than one option has been found, and the agent has to
         // stop and ask which one.
@@ -229,6 +229,11 @@ export default function App() {
   // With an answer on screen the box prompts the next question rather than
   // repeating a generic hint — the agent already worked out what is worth
   // asking, so the input may as well say it.
+  // What the visible options were actually filtered for — taken from the
+  // request that produced them, not from what happens to be toggled now.
+  const lastAskedNeeds = [...messages].reverse().find((m) => m.role === 'user')?.needs || []
+  const appliedNeeds = NEEDS.filter((n) => lastAskedNeeds.includes(n.id))
+
   const suggested = result?.follow_ups?.[0]
   const nextPrompt = !conversing
     ? 'A few quiet nights in Bali, under $900, whenever is cheapest…'
@@ -395,6 +400,16 @@ export default function App() {
                     Every price is the whole trip — {combos[0]?.includes_flight
                       ? 'both fares and every night' : 'the stay in full'}.
                   </p>
+                  {/* Step one has no conversation to attach them to, so the
+                      filters that produced these options are stated here. */}
+                  {appliedNeeds.length > 0 && (
+                    <p className="step-filters">
+                      Filtered for
+                      <span className="step-filter-chips">
+                        {appliedNeeds.map((n) => <span key={n.id}>{n.label}</span>)}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="combos">
                   {combos.map((c) => (

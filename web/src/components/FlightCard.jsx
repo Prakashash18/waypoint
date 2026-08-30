@@ -61,7 +61,7 @@ export default function FlightCard({ flight, onBook, localeTz }) {
 
       <footer className="card-foot">
         <button type="button" className="btn-primary" onClick={onBook}>
-          <Mic size={17} /> Book by voice
+          <Mic size={17} /> Book this flight
         </button>
         <p className="fine">
           You confirm the passengers and the price out loud before anything is charged

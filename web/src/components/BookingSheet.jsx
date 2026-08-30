@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { money, clockTime, shortDate, duration } from '../lib/format'
-import { Close } from './Icons'
+import { Close, Mic } from './Icons'
 
 /** Confirming a flight out loud.
  *
@@ -13,6 +13,9 @@ export default function BookingSheet({ flight, onClose, voice }) {
   // and the baggage priced against the airline before anything is shown.
   const [steps, setSteps] = useState(null)
   const [checking, setChecking] = useState(false)
+  // Confirming out loud and confirming by typing are the same act; some
+  // people are in a quiet room, and some just prefer a keyboard.
+  const [typed, setTyped] = useState('')
 
   useEffect(() => {
     if (!flight?.offer_id) return
@@ -90,9 +93,34 @@ export default function BookingSheet({ flight, onClose, voice }) {
 
           <p className="serif booking-ask">“{priceLine}”</p>
 
+          <div className="booking-reply">
+            <button type="button" className="btn-secondary booking-hold"
+                    onPointerDown={() => voice?.start?.()}
+                    onPointerUp={async () => {
+                      const said = await voice?.stopAndTranscribe?.()
+                      if (said) setTyped(said)
+                    }}>
+              <Mic size={16} /> Hold to answer
+            </button>
+            <span className="booking-or">or</span>
+            <input
+              type="text"
+              className="booking-type"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder="type your answer…"
+              aria-label="Answer by typing instead of speaking"
+            />
+          </div>
+
           <div className="booking-steps">
             <p className="mono eyebrow">
               {checking ? 'Checking with the airline…' : 'Checked with the airline'}
+            </p>
+            <p className="fine booking-intro">
+              Each of these ran against the airline's own system just now. Nothing
+              below happens without you saying so, and you can close this at any
+              point — the fare is held, not bought.
             </p>
             <ol>
               {(steps || []).map((st) => (
@@ -126,10 +154,12 @@ export default function BookingSheet({ flight, onClose, voice }) {
             <button type="button" className="btn-secondary" onClick={onClose}>Not yet</button>
           </div>
 
-          <p className="fine">
-            The steps above really ran against the airline just now. Passenger details
-            and payment are not wired up, so the final button is inactive — nothing can
-            be charged from here.
+          <p className="fine booking-truth">
+            <strong>Where this actually stands.</strong> The fare has been verified and
+            held, the price re-confirmed and the baggage priced — all of that is real.
+            Passenger details and payment are not built yet, so this build cannot
+            issue a ticket and the confirm button stays inactive. Nothing here can
+            charge you, and we would rather say so than let you find out at the end.
           </p>
         </div>
       </section>

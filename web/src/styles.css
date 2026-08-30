@@ -915,3 +915,56 @@ img { max-width: 100%; }
 .combo-dates { margin: 0; font-size: 14px; color: var(--dim);
   font-variant-numeric: tabular-nums; }
 .chosen-dates { display: block; margin-top: 3px; font-size: 14px; color: var(--dim); }
+
+/* ── answering the booking question ──────────────────────────── */
+
+.booking-reply { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+.booking-hold { flex: none; min-height: 46px; touch-action: none; user-select: none; }
+.booking-or { font-size: 14px; color: var(--faint); }
+.booking-type {
+  flex: 1 1 200px; min-height: 46px; padding: 12px 15px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  font: 400 16px/1 var(--sans);
+}
+.booking-type:focus { outline: none; border-color: var(--accent); }
+.booking-type::placeholder { color: var(--faint); }
+
+.booking-intro { margin: 0 0 4px; }
+.booking-truth {
+  padding: 13px 15px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  color: var(--dim);
+}
+.booking-truth strong { color: var(--ink); }
+
+/* ── needs: selected should be unmistakable ──────────────────── */
+
+.needs.has-selection .needs-label { color: var(--accent); }
+.need { display: inline-flex; align-items: center; gap: 0; }
+.need-tick { display: inline-flex; width: 0; overflow: hidden;
+  transition: width .16s ease, margin-right .16s ease; }
+.need.is-on {
+  background: var(--accent); color: var(--accent-ink);
+  border-color: var(--accent); font-weight: 600;
+}
+.need.is-on .need-tick { width: 13px; margin-right: 7px; }
+.need.is-on:hover:not(:disabled) { color: var(--accent-ink); filter: brightness(1.06); }
+
+/* What a question was filtered for, kept with the question. */
+.turn-needs { display: flex; flex-wrap: wrap; gap: 6px; list-style: none;
+  padding: 0; margin: 9px 0 0; justify-content: flex-end; }
+.turn-needs li {
+  font: 600 12px/1 var(--mono); letter-spacing: .04em;
+  color: var(--accent); background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  padding: 5px 9px; border-radius: 999px;
+}
+
+.step-filters { display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  margin: 6px 0 0; font-size: 15px; color: var(--dim); }
+.step-filter-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.step-filter-chips span {
+  font: 600 13.5px/1 var(--sans); color: var(--accent);
+  background: var(--accent-soft); padding: 6px 11px; border-radius: 999px;
+}

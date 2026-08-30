@@ -84,7 +84,7 @@ export default function ChosenTrip({ combo, onBack, onBookFlight, onOpenStay, ot
           <div className="chosen-actions">
             {flight && (
               <button type="button" className="btn-primary" onClick={() => onBookFlight(flight)}>
-                <Mic size={17} /> Book the flight by voice
+                <Mic size={17} /> Book this flight
               </button>
             )}
             <a className="btn-secondary" href={hotel.booking_url || hotel.website || '#'}
