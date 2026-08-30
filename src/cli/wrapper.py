@@ -144,10 +144,20 @@ class AtlasCLI:
         return self._execute(['offer', 'verify', '--offer-id', offer_id, '--json'])
     
     # Booking commands
-    def booking_confirm_price(self, offer_id: str) -> AtlasEnvelope:
-        """Confirm the price for an offer"""
-        return self._execute(['booking', 'confirm-price', '--offer-id', offer_id, '--json'])
+    def booking_confirm_price(self, booking_id: str) -> AtlasEnvelope:
+        """Confirm the price for a held booking.
+
+        Takes the booking id from `offer verify`, not the offer id — the CLI
+        has always wanted --booking-id, so this call could never have worked.
+        """
+        return self._execute(['booking', 'confirm-price',
+                              '--booking-id', booking_id, '--json'])
     
+    def booking_baggage_list(self, booking_id: str) -> AtlasEnvelope:
+        """What baggage this fare offers, and what each piece costs."""
+        return self._execute(['booking', 'baggage', 'list',
+                              '--booking-id', booking_id, '--json'])
+
     def booking_baggage(self, booking_id: str, baggage_option: str) -> AtlasEnvelope:
         """Add baggage to booking"""
         return self._execute([

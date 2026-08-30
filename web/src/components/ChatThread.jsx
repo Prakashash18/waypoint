@@ -11,8 +11,13 @@ import ReplyCards from './ReplyCards'
 export default function ChatThread({ messages, busy, onAsk, onOpenStay, onBookFlight, suggestions = [] }) {
   const endRef = useRef(null)
 
+  // Follow the conversation only when the reader is already at the bottom.
+  // Scrolling someone who has deliberately gone back up is worse than making
+  // them scroll down themselves.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    const nearBottom =
+      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 220
+    if (nearBottom) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [messages.length, busy])
 
   if (!messages.length) return null

@@ -68,6 +68,18 @@ class AtlasTool(ToolBase):
                 required=['origin', 'destination', 'around'],
             ),
             ToolCapability(
+                name='baggage_options',
+                description=(
+                    "What luggage this fare allows and what extra bags cost. Budget "
+                    "carriers price checked bags separately, so a cheap fare is not "
+                    "cheap once a suitcase is added — check before recommending on "
+                    "price alone."
+                ),
+                parameters={'offer_id': 'The offer to price baggage for'},
+                returns='list[BaggageOption]',
+                required=['offer_id'],
+            ),
+            ToolCapability(
                 name='verify_offer',
                 description='Check if an offer is still available and priced',
                 parameters={'offer_id': 'The offer ID to verify'},
@@ -76,16 +88,19 @@ class AtlasTool(ToolBase):
             ),
             ToolCapability(
                 name='confirm_price',
-                description='Lock in the price for an offer',
-                parameters={'offer_id': 'The offer ID'},
+                description=('Lock in the price for a held booking. Verify the offer '
+                             'first — this takes the booking id that returns.'),
+                parameters={'booking_id': 'The booking ID from verify_offer'},
                 returns='PriceConfirmation',
-                required=['offer_id'],
+                required=['booking_id'],
             ),
         ]
     
     def execute(self, capability: str, params: Dict[str, Any]) -> ToolResult:
         if capability == 'search_flights':
             return self._search_flights(params)
+        elif capability == 'baggage_options':
+            return self._baggage_options(params)
         elif capability == 'find_date_deals':
             return self._find_date_deals(params)
         elif capability == 'verify_offer':
@@ -298,6 +313,68 @@ class AtlasTool(ToolBase):
             ),
         )
 
+    def _baggage_options(self, params: Dict[str, Any]) -> ToolResult:
+        """Real baggage prices for a fare.
+
+        Needs a booking context, so this verifies the offer first — the same
+        step the booking flow takes, and it is what makes a headline fare
+        comparable with one that already includes a bag.
+        """
+        offer_id = params.get('offer_id', '')
+        if not offer_id:
+            return ToolResult(status=ToolStatus.ERROR, message='offer_id is required',
+                              error='Missing parameter')
+        try:
+            verified = self._cli.offer_verify(offer_id)
+            if verified.is_error():
+                return ToolResult(status=ToolStatus.ERROR, message=verified.message,
+                                  error=verified.code)
+            booking_id = verified.get_data('booking_id', '')
+            if not booking_id:
+                return ToolResult(status=ToolStatus.NO_RESULTS,
+                                  message='That offer produced no booking to price bags against')
+
+            listed = self._cli.booking_baggage_list(booking_id)
+            if listed.is_error():
+                return ToolResult(status=ToolStatus.ERROR, message=listed.message,
+                                  error=listed.code)
+
+            options = listed.get_data('options', []) or []
+            # One row per weight, cheapest first — the same 20kg appears once
+            # per segment and a traveller does not care about segment ids.
+            by_weight: Dict[Any, Dict[str, Any]] = {}
+            for opt in options:
+                key = (opt.get('weight_kg'), opt.get('category'))
+                if key not in by_weight or opt.get('price', 1e9) < by_weight[key]['price']:
+                    by_weight[key] = {
+                        'baggage_id': opt.get('baggage_id'),
+                        'weight_kg': opt.get('weight_kg'),
+                        'pieces': opt.get('piece'),
+                        'category': opt.get('category'),
+                        'price': opt.get('price'),
+                        'currency': opt.get('currency', 'USD'),
+                    }
+            rows = sorted(by_weight.values(), key=lambda o: (o['price'] or 0))
+
+            if not rows:
+                return ToolResult(
+                    status=ToolStatus.NO_RESULTS,
+                    data={'offer_id': offer_id, 'booking_id': booking_id, 'options': []},
+                    message='This fare lists no extra baggage — cabin allowance only.')
+
+            cheapest = rows[0]
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={'offer_id': offer_id, 'booking_id': booking_id,
+                      'options': rows, 'count': len(rows)},
+                message=(f"{len(rows)} checked-bag options; cheapest is "
+                         f"{cheapest['weight_kg']}kg at {cheapest['currency']} "
+                         f"{cheapest['price']:.2f} per passenger"),
+            )
+        except AtlasError as exc:
+            return ToolResult(status=ToolStatus.ERROR, message=str(exc),
+                              error=getattr(exc, 'code', 'BAGGAGE_FAILED'))
+
     def _verify_offer(self, params: Dict[str, Any]) -> ToolResult:
         offer_id = params.get('offer_id', '')
         if not offer_id:
@@ -329,16 +406,16 @@ class AtlasTool(ToolBase):
             )
     
     def _confirm_price(self, params: Dict[str, Any]) -> ToolResult:
-        offer_id = params.get('offer_id', '')
-        if not offer_id:
+        booking_id = params.get('booking_id') or params.get('offer_id', '')
+        if not booking_id:
             return ToolResult(
                 status=ToolStatus.ERROR,
-                message='offer_id is required',
+                message='booking_id is required (from verify_offer)',
                 error='Missing parameter',
             )
-        
+
         try:
-            envelope = self._cli.booking_confirm_price(offer_id)
+            envelope = self._cli.booking_confirm_price(booking_id)
             if envelope.is_error():
                 return ToolResult(
                     status=ToolStatus.ERROR,

@@ -61,6 +61,9 @@ MONEY AND TIME — READ THIS BEFORE QUOTING ANYTHING
 - `price_total` on a flight offer is the fare for EVERYONE on the booking.
   `price_per_passenger` is the per-person fare. Say which one you mean. Calling
   a two-adult total a per-person price doubles the trip in the traveller's head.
+- Budget carriers price checked bags separately. Before calling a fare the
+  cheapest, use `atlas_flights__baggage_options` — a bag each can add half the
+  fare again, and the traveller should hear that from you, not at the airport.
 - A hotel's `total_price` covers the WHOLE STAY, not one night;
   `price_per_night` is the nightly rate. Never report a total as a nightly rate:
   a four-night total read as per-night quadruples the stay.
@@ -89,6 +92,9 @@ HOW TO WORK
   official websites but no prices. Use it to go deeper on a specific area,
   to find places rates coverage missed, or when rates are unavailable.
 - `places__describe_area` gives factual Wikipedia context about a neighbourhood.
+- `places__find_attractions` lists real places near a hotel with walking
+  directions from it. Use it for "what is nearby" rather than answering from
+  memory. Pass the hotel's lat/lon and its name as from_name.
 
 SHOWING THE TRAVELLER WHAT A PLACE LOOKS LIKE
 - Hotels from `hotel_rates` already carry real Booking.com photographs in
@@ -241,6 +247,7 @@ class TripAgent:
             'areas': list(prior.get('areas') or []),
             'windows': list(prior.get('windows') or []),
             'airports': list(prior.get('airports') or []),
+            'attractions': list(prior.get('attractions') or []),
             'locale': prior.get('locale'),
         }
         if session:
@@ -548,6 +555,8 @@ class TripAgent:
             artifacts['images'].extend(data.get('photos') or [])
         elif capability == 'find_date_deals':
             artifacts['windows'] = data.get('windows') or artifacts['windows']
+        elif capability == 'find_attractions':
+            artifacts['attractions'] = data.get('attractions') or artifacts.get('attractions') or []
         elif capability == 'nearest_airports':
             artifacts['airports'] = data.get('airports') or artifacts['airports']
         elif capability == 'detect_locale' and data.get('detected'):
@@ -632,6 +641,16 @@ class TripAgent:
                 payload['unpriced_note'] = ('No fare came back for these dates. Say they '
                                             'could not be checked; do not estimate them.')
             payload['price_note'] = 'Every price_total covers all passengers.'
+            return payload
+
+        attractions = data.get('attractions')
+        if attractions is not None:
+            payload['count'] = len(attractions)
+            payload['attractions'] = [
+                {k: a.get(k) for k in ('name', 'category', 'distance_km')}
+                for a in attractions[:8]]
+            payload['note'] = ('The interface shows these with walking directions. '
+                               'Name them; do not paste the links.')
             return payload
 
         airports = data.get('airports')

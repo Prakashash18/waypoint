@@ -69,6 +69,21 @@ export default function App() {
   const { locale, origin, airports } = useLocale()
   const inputRef = useRef(null)
   const resultsRef = useRef(null)
+  const composeRef = useRef(null)
+
+  useEffect(() => {
+    const bar = composeRef.current
+    if (!bar || !conversing) {
+      document.documentElement.style.removeProperty('--dock-h')
+      return undefined
+    }
+    const measure = () => document.documentElement.style
+      .setProperty('--dock-h', `${Math.ceil(bar.getBoundingClientRect().height)}px`)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(bar)
+    return () => { observer.disconnect() }
+  }, [conversing, needs.length, busy])
 
   useEffect(() => {
     getVoiceStatus()
@@ -91,8 +106,6 @@ export default function App() {
     if (chosen) setStage('ask')
     setMessages((prev) => [...prev, { role: 'user', text: request }])
     if (!chosen) setStage('choose')
-    // The HUD used to render below the fold, so nothing appeared to happen.
-    window.scrollTo({ top: 0, behavior: 'smooth' })
     const controller = new AbortController()
     abortRef.current = controller
     try {
@@ -228,7 +241,7 @@ export default function App() {
 
       <main className="main">
         {/* ── ask ─────────────────────────────────────────── */}
-        <section className={`compose${conversing ? ' is-answered' : ''}`}>
+        <section ref={composeRef} className={`compose${conversing ? ' is-answered' : ''}`}>
           {!conversing && (
             <>
               <p className="mono eyebrow centred">Plan a trip</p>

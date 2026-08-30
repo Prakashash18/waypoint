@@ -552,7 +552,7 @@ img { max-width: 100%; }
    and docks to the bottom as an overlay, so results start at the top of the
    viewport instead of below the fold. */
 
-.app.is-conversing .main { padding-bottom: 190px; }
+.app.is-conversing .main { padding-bottom: calc(var(--dock-h, 190px) + 26px); }
 
 @media (min-width: 720px) {
   .app.is-conversing .compose {
@@ -677,8 +677,6 @@ img { max-width: 100%; }
 .app.is-conversing .mic.is-compact { width: 40px; height: 40px; }
 .app.is-conversing .needs { margin-top: 8px; }
 .app.is-conversing .need { min-height: 30px; padding: 6px 11px; font-size: 13.5px; }
-@media (min-width: 720px) { .app.is-conversing .main { padding-bottom: 168px; } }
-@media (max-width: 719px) { .app.is-conversing .main { padding-bottom: 176px; } }
 
 /* ── conversation ────────────────────────────────────────────── */
 
@@ -858,3 +856,39 @@ img { max-width: 100%; }
 .hud-said { margin: 3px 0 0; font-size: 14px; color: var(--dim); }
 .hud-step { align-items: flex-start; }
 .hud-glyph { margin-top: 2px; }
+
+/* The docked bar floats over the page, so the last turn needs the same
+   clearance the page reserves — otherwise a reply lands underneath it. */
+.thread { scroll-padding-bottom: calc(var(--dock-h, 190px) + 26px); }
+.app.is-conversing .results > *:last-child { scroll-margin-bottom: calc(var(--dock-h, 190px) + 26px); }
+
+/* ── nearby, with directions ─────────────────────────────────── */
+
+.rcard.is-nearby { flex: 1 1 100%; }
+.nearby-list { list-style: none; padding: 0; margin: 10px 0 8px;
+  display: flex; flex-direction: column; gap: 2px; }
+.nearby-list a {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 11px 12px; border-radius: 9px; color: var(--ink);
+  min-height: 44px; border: 1px solid transparent;
+}
+.nearby-list a:hover { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.nearby-name { font-size: 15px; font-weight: 600; }
+.nearby-meta { font-size: 13.5px; color: var(--faint); }
+.nearby-go { margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13.5px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+
+/* ── the real booking steps ──────────────────────────────────── */
+
+.booking-steps ol { list-style: none; padding: 0; margin: 10px 0 0;
+  display: flex; flex-direction: column; gap: 11px; }
+.booking-steps li { display: flex; gap: 11px; align-items: flex-start; }
+.booking-mark { width: 20px; flex: none; font-size: 15px; line-height: 1.4; color: var(--good); }
+.booking-steps li.is-failed .booking-mark { color: var(--bad); }
+.booking-label { margin: 0; font-size: 15px; font-weight: 600; }
+.booking-detail { margin: 3px 0 0; font-size: 14px; color: var(--dim); }
+.booking-bags { list-style: none; display: flex; flex-wrap: wrap; gap: 7px;
+  padding: 0; margin: 8px 0 0; }
+.booking-bags li { font-size: 13.5px; color: var(--dim); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; }
+.booking-steps li.is-pending { color: var(--faint); font-size: 14px; align-items: center; gap: 9px; }

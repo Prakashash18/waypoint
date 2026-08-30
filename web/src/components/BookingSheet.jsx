@@ -9,6 +9,26 @@ import { Close } from './Icons'
  */
 export default function BookingSheet({ flight, onClose, voice }) {
   const [spoken, setSpoken] = useState(false)
+  // The steps below are real: the offer is re-verified, the price re-confirmed
+  // and the baggage priced against the airline before anything is shown.
+  const [steps, setSteps] = useState(null)
+  const [checking, setChecking] = useState(false)
+
+  useEffect(() => {
+    if (!flight?.offer_id) return
+    let live = true
+    setChecking(true)
+    fetch('/api/booking/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ offer_id: flight.offer_id, currency: flight.currency,
+                             quoted_total: flight.price_total }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (live) setSteps(d.steps || []) })
+      .catch(() => { if (live) setSteps([]) })
+      .finally(() => { if (live) setChecking(false) })
+    return () => { live = false }
+  }, [flight])
 
   const priceLine = flight && (
     `${money(flight.price_total, flight.currency)} with ` +
@@ -70,14 +90,46 @@ export default function BookingSheet({ flight, onClose, voice }) {
 
           <p className="serif booking-ask">“{priceLine}”</p>
 
+          <div className="booking-steps">
+            <p className="mono eyebrow">
+              {checking ? 'Checking with the airline…' : 'Checked with the airline'}
+            </p>
+            <ol>
+              {(steps || []).map((st) => (
+                <li key={st.key} className={st.status === 'ok' ? 'is-ok' : 'is-failed'}>
+                  <span className="booking-mark" aria-hidden="true">
+                    {st.status === 'ok' ? '✓' : '✕'}
+                  </span>
+                  <div>
+                    <p className="booking-label">{st.label}</p>
+                    <p className="booking-detail">{st.detail}</p>
+                    {st.options?.length > 0 && (
+                      <ul className="booking-bags">
+                        {st.options.slice(0, 4).map((o) => (
+                          <li key={o.weight_kg}>
+                            {o.weight_kg}kg · {o.currency} {Number(o.price).toFixed(2)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </li>
+              ))}
+              {checking && !steps && <li className="is-pending"><span className="spinner" /> Verifying the fare…</li>}
+            </ol>
+          </div>
+
           <div className="sheet-actions">
-            <button type="button" className="btn-primary is-wide">Confirm and book</button>
+            <button type="button" className="btn-primary is-wide" disabled>
+              Confirm and book
+            </button>
             <button type="button" className="btn-secondary" onClick={onClose}>Not yet</button>
           </div>
 
           <p className="fine">
-            Nothing is charged until you confirm. This screen is a preview of the booking
-            flow — the fare shown is the live quote for this offer.
+            The steps above really ran against the airline just now. Passenger details
+            and payment are not wired up, so the final button is inactive — nothing can
+            be charged from here.
           </p>
         </div>
       </section>

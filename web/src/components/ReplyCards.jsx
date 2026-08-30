@@ -15,6 +15,7 @@ export default function ReplyCards({ cards, onOpen, onBookFlight }) {
       {cards.map((card, i) => {
         if (card.kind === 'price_change') return <PriceChange key={i} card={card} />
         if (card.kind === 'flight') return <FlightCardInline key={i} card={card} onBook={onBookFlight} />
+        if (card.kind === 'attractions') return <Nearby key={i} card={card} />
         return <StayCard key={i} card={card} onOpen={onOpen} />
       })}
     </div>
@@ -122,6 +123,32 @@ function FlightCardInline({ card, onBook }) {
           <Mic size={13} /> Book by voice
         </button>
       )}
+    </div>
+  )
+}
+
+
+/** Real places near the stay, each opening walking directions from it. */
+function Nearby({ card }) {
+  if (!card.places?.length) return null
+  return (
+    <div className="rcard is-nearby">
+      <p className="rcard-title">
+        Near {card.from_name || 'the stay'}
+      </p>
+      <ul className="nearby-list">
+        {card.places.map((p, i) => (
+          <li key={i}>
+            <a href={p.directions_url} target="_blank" rel="noreferrer noopener"
+               title={`Walking directions from ${card.from_name || 'the stay'} to ${p.name}`}>
+              <span className="nearby-name">{p.name}</span>
+              <span className="nearby-meta">{p.category} · {p.distance_km} km</span>
+              <span className="nearby-go">Directions <External size={12} /></span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p className="rcard-sub">Opens walking directions in Google Maps.</p>
     </div>
   )
 }

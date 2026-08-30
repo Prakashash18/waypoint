@@ -471,7 +471,8 @@ class HotelRatesTool(ToolBase):
 
         hotels = []
         for item in raw:
-            hotel = self._normalize(item, check_in, check_out, nights, prov)
+            hotel = self._normalize(item, check_in, check_out, nights, prov,
+                                    adults=int(params.get('adults', 2) or 2))
             if not hotel:
                 continue
             if min_score and (hotel['review_score'] or 0) < min_score:
@@ -520,7 +521,8 @@ class HotelRatesTool(ToolBase):
         )
 
     def _normalize(self, item: Dict[str, Any], check_in: str, check_out: str,
-                   nights: int, prov: Provenance) -> Optional[Dict[str, Any]]:
+                   nights: int, prov: Provenance,
+                   adults: int = 2) -> Optional[Dict[str, Any]]:
         prop = item.get('property') or {}
         name = prop.get('name')
         if not name:
@@ -562,11 +564,32 @@ class HotelRatesTool(ToolBase):
             'checkout_until': (prop.get('checkout') or {}).get('untilTime', ''),
             'image_url': photos[0] if photos else None,
             'photos': photos[:6],
-            'booking_url': f"https://www.booking.com/hotel/{prop.get('countryCode','')}/{name.lower().replace(' ', '-')}.html",
+            # A slug guessed from the name lands on the wrong page or none at
+            # all. A dated search does land — and carries the dates, so the
+            # price the traveller sees is the one we quoted.
+            'booking_url': self._booking_search_url(name, check_in, check_out, prop)
+                           + f'&group_adults={adults}',
             'summary': item.get('accessibilityLabel', '')[:400],
             'bookable': True,
         }
         return stamp(record, prov)
+
+    @staticmethod
+    def _booking_search_url(name: str, check_in: str, check_out: str,
+                            prop: Dict[str, Any]) -> str:
+        """A Booking.com search for this property on these dates."""
+        from urllib.parse import quote_plus
+
+        where = ', '.join(filter(None, [name, prop.get('wishlistName')]))
+        url = ('https://www.booking.com/searchresults.html'
+               f'?ss={quote_plus(where)}'
+               f'&checkin={check_in}&checkout={check_out}'
+               '&no_rooms=1&group_children=0')
+        lat, lon = prop.get('latitude'), prop.get('longitude')
+        if lat is not None and lon is not None:
+            # Pins the map to the property so the right one is top of the list.
+            url += f'&latitude={lat}&longitude={lon}'
+        return url
 
     # ── photos ───────────────────────────────────────────────────
 

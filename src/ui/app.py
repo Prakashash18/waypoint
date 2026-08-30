@@ -793,6 +793,101 @@ def cache_settings():
     return jsonify({'success': True, **rates.cache_stats()})
 
 
+@app.route('/api/booking/prepare', methods=['POST'])
+def booking_prepare():
+    """Run the real Atlas steps that come before paying, and report each one.
+
+    Booking used to happen entirely out of sight, so the confirmation screen
+    was a picture of a process rather than the process. These are the actual
+    CLI calls — the offer is re-verified, the price re-confirmed, and the
+    baggage priced — and each step reports what really came back, including
+    a price that moved between search and now.
+    """
+    from src.tools import tool_registry
+
+    data = request.json or {}
+    offer_id = (data.get('offer_id') or '').strip()
+    if not offer_id:
+        return jsonify({'success': False, 'error': 'offer_id is required'}), 400
+
+    steps, booking_id, confirmed = [], None, None
+
+    def note(key, label, ok, detail, **extra):
+        steps.append({'key': key, 'label': label,
+                      'status': 'ok' if ok else 'failed', 'detail': detail, **extra})
+
+    try:
+        verified = cli.offer_verify(offer_id)
+        if verified.is_error():
+            note('verify', 'Check the fare is still available', False, verified.message)
+            return jsonify({'success': False, 'steps': steps,
+                            'error': verified.message}), 200
+        booking_id = verified.get_data('booking_id', '')
+        note('verify', 'Check the fare is still available', True,
+             f'Held as {booking_id}', booking_id=booking_id)
+
+        priced = cli.booking_confirm_price(booking_id)
+        if priced.is_error():
+            note('price', 'Confirm the price', False, priced.message)
+        else:
+            # Atlas reports the movement itself, per passenger, so use its own
+            # figures rather than comparing against what we last displayed.
+            confirmed = priced.get_data('current_price', None)
+            previous = priced.get_data('previous_price', None)
+            currency = priced.get_data('currency', '') or data.get('currency', '')
+            change = priced.get_data('price_change', 'unchanged')
+            travellers = len(priced.get_data('travelers', []) or []) or 1
+            moved = change != 'unchanged'
+            # Verified against a search: current_price equals the offer's
+            # total_price for the whole party, not the per-person fare.
+            each = (round(confirmed / travellers, 2)
+                    if confirmed is not None and travellers else None)
+            party = (f'for {travellers} passengers' if travellers > 1 else '')
+            note('price', 'Confirm the price', True,
+                 (f'{currency} {previous} → {currency} {confirmed} total {party}'
+                  if moved else
+                  f'Unchanged at {currency} {confirmed} total {party}'
+                  + (f' · {currency} {each} each' if each and travellers > 1 else '')),
+                 confirmed_total=confirmed, previous_total=previous,
+                 price_per_passenger=each,
+                 currency=currency, changed=moved, passengers=travellers,
+                 required_fields=(priced.get_data('requirements', {}) or {}).get('required_fields', []))
+
+        if booking_id:
+            bags = cli.booking_baggage_list(booking_id)
+            if bags.is_error():
+                note('baggage', 'Price the luggage', False, bags.message)
+            else:
+                options = bags.get_data('options', []) or []
+                by_weight = {}
+                for opt in options:
+                    key = opt.get('weight_kg')
+                    if key not in by_weight or opt.get('price', 1e9) < by_weight[key]['price']:
+                        by_weight[key] = {'weight_kg': key, 'price': opt.get('price'),
+                                          'currency': opt.get('currency', 'USD'),
+                                          'baggage_id': opt.get('baggage_id')}
+                rows = sorted(by_weight.values(), key=lambda o: o['price'] or 0)
+                note('baggage', 'Price the luggage', True,
+                     (f'{len(rows)} checked-bag options from '
+                      f'{rows[0]["currency"]} {rows[0]["price"]:.2f}' if rows
+                      else 'Cabin baggage only — no checked bags offered'),
+                     options=rows)
+
+        note('passengers', 'Enter passenger details', True,
+             'Names, dates of birth and contact details — not collected here')
+        note('pay', 'Pay and issue the ticket', True,
+             'The final step. Nothing has been charged.')
+
+        return jsonify({'success': True, 'steps': steps, 'booking_id': booking_id,
+                        'confirmed_total': confirmed,
+                        'note': ('Everything above really ran against the airline. '
+                                 'Passenger details and payment are not wired up.')})
+    except Exception as exc:
+        app.logger.exception('booking prepare failed')
+        note('error', 'Preparing the booking', False, str(exc))
+        return jsonify({'success': False, 'steps': steps, 'error': str(exc)}), 200
+
+
 @app.route('/api/sources', methods=['GET'])
 def list_sources():
     """Which data providers are configured, so the UI can be honest up front."""
@@ -1095,6 +1190,19 @@ def _cards_from(result: dict, before: dict) -> list:
                 'currency': now_flight.get('currency'),
                 'offer_id': now_flight.get('offer_id'),
             })
+
+    # Somewhere to walk to, with a route from where they are staying.
+    attractions = artifacts.get('attractions') or []
+    if attractions and any(w in answer for w in
+                           ('near', 'nearby', 'walk', 'walking', 'around', 'close by',
+                            'attraction', 'museum', 'restaurant', 'temple')):
+        cards.append({
+            'kind': 'attractions',
+            'from_name': (artifacts.get('hotels') or [{}])[0].get('name', ''),
+            'places': [{k: a.get(k) for k in
+                        ('name', 'category', 'distance_km', 'directions_url', 'map_url', 'website')}
+                       for a in attractions[:6]],
+        })
 
     # Whichever stays the reply is actually about, so the answer has a face.
     named = [h for h in hotels if h.get('name') and h['name'].lower() in answer]

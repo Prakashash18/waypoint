@@ -154,6 +154,24 @@ class PlacesTool(ToolBase):
                 required=['destination'],
             ),
             ToolCapability(
+                name='find_attractions',
+                description=(
+                    'Find real attractions, restaurants and landmarks near a point, '
+                    'each with a directions link from a given starting place. Use it '
+                    'to answer "what is near the hotel" or "what is worth walking to".'
+                ),
+                parameters={
+                    'lat': 'Latitude to search around',
+                    'lon': 'Longitude to search around',
+                    'from_name': 'Where directions should start, e.g. the hotel name',
+                    'radius_m': 'How far to look (default 2500, max 15000)',
+                    'kind': 'attraction | food | all (default attraction)',
+                    'limit': 'Max results (default 8)',
+                },
+                returns='list[Attraction]',
+                required=['lat', 'lon'],
+            ),
+            ToolCapability(
                 name='nearest_airports',
                 description=(
                     'Find the real airports nearest a set of coordinates, with IATA '
@@ -204,6 +222,8 @@ class PlacesTool(ToolBase):
     def execute(self, capability: str, params: Dict[str, Any]) -> ToolResult:
         if capability == 'find_hotels':
             return self.find_hotels(params)
+        if capability == 'find_attractions':
+            return self.find_attractions(params)
         if capability == 'nearest_airports':
             return self.nearest_airports(params)
         if capability == 'match_hotel':
@@ -488,6 +508,123 @@ class PlacesTool(ToolBase):
             'image_url': None,
         }
         return stamp(record, prov)
+
+    # ── things to walk to ────────────────────────────────────────
+
+    OSM_KINDS = {
+        'attraction': (
+            'node["tourism"~"^(attraction|museum|artwork|viewpoint|gallery|zoo|theme_park)$"]',
+            'way["tourism"~"^(attraction|museum|artwork|viewpoint|gallery|zoo|theme_park)$"]',
+            'node["historic"]["name"]',
+            'node["leisure"~"^(park|garden|nature_reserve)$"]["name"]',
+        ),
+        'food': (
+            'node["amenity"~"^(restaurant|cafe|bar)$"]["name"]',
+            'way["amenity"~"^(restaurant|cafe|bar)$"]["name"]',
+        ),
+    }
+
+    def find_attractions(self, params: Dict[str, Any]) -> ToolResult:
+        """Real places near a point, each with a route from where you are staying.
+
+        Coordinates come from OpenStreetMap, so these exist. The directions
+        link is built from those coordinates — it opens the traveller's own map
+        app rather than us pretending to know the walking time.
+        """
+        lat, lon = params.get('lat'), params.get('lon')
+        if lat is None or lon is None:
+            return ToolResult(status=ToolStatus.ERROR,
+                              message='lat and lon are required', error='Missing coordinates')
+        lat, lon = float(lat), float(lon)
+        radius = min(int(params.get('radius_m', 2500) or 2500), 15000)
+        limit = int(params.get('limit', 8) or 8)
+        from_name = (params.get('from_name') or '').strip()
+        kind = (params.get('kind') or 'attraction').lower()
+
+        selectors = []
+        for key in (('attraction', 'food') if kind == 'all' else (kind,)):
+            selectors.extend(self.OSM_KINDS.get(key, self.OSM_KINDS['attraction']))
+
+        clauses = ''.join(f'{sel}(around:{radius},{lat},{lon});' for sel in selectors)
+        elements, err = self._overpass(
+            f'[out:json][timeout:25];({clauses});out center tags 120;', timeout=25)
+        if elements is None:
+            prov = Provenance('osm', SourceStatus.FAILED, detail=err or 'unknown error')
+            return ToolResult(
+                status=ToolStatus.ERROR,
+                data={'attractions': [], 'provenance': prov.to_dict()},
+                message=f'Could not reach OpenStreetMap for what is nearby: {err}',
+                error=err)
+
+        import math
+        found, seen = [], set()
+        for el in elements:
+            tags = el.get('tags', {}) or {}
+            name = tags.get('name') or tags.get('name:en')
+            if not name or name.lower() in seen:
+                continue
+            alat = el.get('lat') or (el.get('center') or {}).get('lat')
+            alon = el.get('lon') or (el.get('center') or {}).get('lon')
+            if alat is None or alon is None:
+                continue
+            seen.add(name.lower())
+
+            dx = (math.radians(alon - lon) * math.cos(math.radians((alat + lat) / 2)) * 6371)
+            dy = math.radians(alat - lat) * 6371
+            distance = round(math.hypot(dx, dy), 2)
+
+            found.append({
+                'name': name,
+                'category': (tags.get('tourism') or tags.get('historic')
+                             or tags.get('leisure') or tags.get('amenity') or 'place'),
+                'lat': alat, 'lon': alon,
+                'distance_km': distance,
+                'website': tags.get('website') or tags.get('contact:website', ''),
+                'osm_url': f"https://www.openstreetmap.org/{el.get('type', 'node')}/{el.get('id')}",
+                'directions_url': self._directions_url(lat, lon, alat, alon, from_name, name),
+                'map_url': f'https://www.google.com/maps/search/?api=1&query={alat},{alon}',
+            })
+
+        found.sort(key=lambda a: a['distance_km'])
+        found = found[:limit]
+
+        if not found:
+            prov = Provenance('osm', SourceStatus.UNAVAILABLE,
+                              detail=f'nothing tagged within {radius}m')
+            return ToolResult(status=ToolStatus.NO_RESULTS,
+                              data={'attractions': [], 'provenance': prov.to_dict()},
+                              message=f'OpenStreetMap lists nothing within {radius}m of there')
+
+        prov = Provenance('osm', SourceStatus.LIVE, license='ODbL',
+                          attribution=OSM_ATTRIBUTION,
+                          detail=f'{kind} within {radius}m; directions open in Google Maps')
+        return ToolResult(
+            status=ToolStatus.SUCCESS,
+            data={'attractions': found, 'count': len(found),
+                  'from': {'lat': lat, 'lon': lon, 'name': from_name},
+                  'provenance': prov.to_dict()},
+            message=(f'{len(found)} places within {radius / 1000:g}km'
+                     + (f' of {from_name}' if from_name else '')
+                     + f', nearest {found[0]["name"]} at {found[0]["distance_km"]}km'),
+        )
+
+    @staticmethod
+    def _directions_url(from_lat: float, from_lon: float, to_lat: float, to_lon: float,
+                        from_name: str, to_name: str) -> str:
+        """A Google Maps walking route between two real coordinates.
+
+        Coordinates rather than names: a name can resolve to the wrong branch
+        in another country, whereas these are the points OSM actually holds.
+        """
+        from urllib.parse import quote_plus
+        origin = f'{from_lat},{from_lon}'
+        destination = f'{to_lat},{to_lon}'
+        # Coordinates only: an empty destination_place_id makes Google drop the
+        # whole destination, and a bare name can resolve to another country.
+        return ('https://www.google.com/maps/dir/?api=1'
+                f'&origin={quote_plus(origin)}'
+                f'&destination={quote_plus(destination)}'
+                '&travelmode=walking')
 
     # ── airports ─────────────────────────────────────────────────
 
