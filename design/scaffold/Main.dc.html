@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin:0; font-family:Karla,"Helvetica Neue",Arial,sans-serif; }
+    a { color:#b45332; text-decoration:none; } a:hover { color:#241f1a; }
+    .serif { font-family:Newsreader,Georgia,serif; font-weight:400; letter-spacing:-0.015em; }
+    .mono { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+  </style>
+</helmet>
+
+<div style="width:1180px; height:880px; background:#faf7f2; color:#241f1a; display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:17px 30px; border-bottom:1px solid #e8e1d6; background:#ffffff;">
+    <div style="display:flex; align-items:center; gap:11px;">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b45332" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.3 7-11.4A7 7 0 0 0 5 9.6C5 14.7 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg>
+      <span class="serif" style="font-size:21px; font-weight:500;">Waypoint</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="mono" style="font-size:12px; letter-spacing:0.06em; color:#6b6157; padding:9px 14px; border:1px solid #e8e1d6; border-radius:999px;">SIN</span>
+      <span style="font-size:14px; color:#6b6157; padding:9px 15px; border:1px solid #e8e1d6; border-radius:999px;">Settings</span>
+    </div>
+  </div>
+
+  <div style="flex-grow:1; padding:34px 30px 0; display:flex; flex-direction:column; gap:22px;">
+
+    <!-- one question, nothing competing with it -->
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:24px;">
+      <div>
+        <p class="mono" style="margin:0 0 10px; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Step 1 of 3 · Ubud, 28 Sep – 2 Oct, two adults</p>
+        <h1 class="serif" style="margin:0; font-size:40px; line-height:1.1;">Which trip?</h1>
+      </div>
+      <p style="margin:0; font-size:15px; line-height:1.5; color:#6b6157; max-width:330px; text-align:right;">Every price is the whole trip — both fares and all four nights.</p>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:18px;">
+
+      <div style="background:#ffffff; border:1px solid #e8e1d6; border-radius:16px; box-shadow:0 1px 2px rgba(36,31,26,.05), 0 10px 26px rgba(36,31,26,.05); padding:20px; display:flex; flex-direction:column; gap:14px;">
+        <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332; background:#f8ece7; padding:7px 11px; border-radius:999px; font-weight:500;">Cheapest</span>
+        <p class="serif" style="margin:0; font-size:34px; line-height:1;">SGD 463</p>
+        <p style="margin:0; font-size:15px; color:#6b6157;">Sandy House · Penestanan</p>
+        <p style="margin:0; font-size:14px; color:#9a9086;">No reviews yet</p>
+        <div style="height:1px; background:#e8e1d6;"></div>
+        <p style="margin:0; font-size:15px; line-height:1.5; color:#6b6157;">The lowest total we found. Newly listed, so nobody has rated it.</p>
+        <button style="margin-top:auto; width:100%; min-height:46px; background:#f3eee6; color:#241f1a; border:1px solid #e8e1d6; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer;">See this trip</button>
+      </div>
+
+      <div style="background:#ffffff; border:2px solid #b45332; border-radius:16px; box-shadow:0 1px 2px rgba(36,31,26,.05), 0 10px 26px rgba(36,31,26,.05); padding:19px; display:flex; flex-direction:column; gap:14px;">
+        <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#ffffff; background:#b45332; padding:7px 11px; border-radius:999px; font-weight:500;">Best value</span>
+        <p class="serif" style="margin:0; font-size:34px; line-height:1;">SGD 518</p>
+        <p style="margin:0; font-size:15px; color:#6b6157;">Saka House · Ubud</p>
+        <p style="margin:0; font-size:14px; color:#3f6b4a; font-weight:600;">8.8 / 10 · 255 reviews</p>
+        <div style="height:1px; background:#e8e1d6;"></div>
+        <p style="margin:0; font-size:15px; line-height:1.5; color:#6b6157;">The best reviews for the money — SGD 55 more than the cheapest.</p>
+        <button style="margin-top:auto; width:100%; min-height:46px; background:#b45332; color:#ffffff; border:0; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer;">See this trip</button>
+      </div>
+
+      <div style="background:#ffffff; border:1px solid #e8e1d6; border-radius:16px; box-shadow:0 1px 2px rgba(36,31,26,.05), 0 10px 26px rgba(36,31,26,.05); padding:20px; display:flex; flex-direction:column; gap:14px;">
+        <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332; background:#f8ece7; padding:7px 11px; border-radius:999px; font-weight:500;">Best reviewed</span>
+        <p class="serif" style="margin:0; font-size:34px; line-height:1;">SGD 601</p>
+        <p style="margin:0; font-size:15px; color:#6b6157;">Lula Boutique · Ubud</p>
+        <p style="margin:0; font-size:14px; color:#3f6b4a; font-weight:600;">10 / 10 · 1 review</p>
+        <div style="height:1px; background:#e8e1d6;"></div>
+        <p style="margin:0; font-size:15px; line-height:1.5; color:#6b6157;">Highest rated available, on a single review. Adults only.</p>
+        <button style="margin-top:auto; width:100%; min-height:46px; background:#f3eee6; color:#241f1a; border:1px solid #e8e1d6; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer;">See this trip</button>
+      </div>
+    </div>
+
+    <p style="margin:0; font-size:15px; color:#9a9086; text-align:center;">All three fly Scoot, SIN → DPS. Dates and details come next.</p>
+  </div>
+
+  <div style="padding:16px 30px 22px; border-top:1px solid #e8e1d6; background:#ffffff; display:flex; align-items:center; gap:14px;">
+    <button style="width:52px; height:52px; flex:none; border-radius:999px; border:0; background:#b45332; color:#ffffff; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+    </button>
+    <span style="flex-grow:1; font-size:16px; color:#9a9086;">Ask anything — “somewhere quieter?”, “what about the 26th?”</span>
+    <button style="min-height:46px; padding:13px 24px; background:#f3eee6; color:#241f1a; border:1px solid #e8e1d6; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer;">Enter</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

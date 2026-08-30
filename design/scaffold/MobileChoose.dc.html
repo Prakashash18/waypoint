@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin:0; font-family:Karla,"Helvetica Neue",Arial,sans-serif; }
+    a { color:#b45332; text-decoration:none; } a:hover { color:#241f1a; }
+    .serif { font-family:Newsreader,Georgia,serif; font-weight:400; letter-spacing:-0.015em; }
+    .mono { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#faf7f2; color:#241f1a; display:flex; flex-direction:column; padding-top:52px;">
+  <div style="padding:0 20px 16px;">
+    <p class="mono" style="margin:0 0 9px; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Step 1 of 3</p>
+    <h1 class="serif" style="margin:0 0 6px; font-size:32px; line-height:1.12;">Which trip?</h1>
+    <p style="margin:0; font-size:15px; line-height:1.5; color:#6b6157;">Ubud · 28 Sep – 2 Oct · two adults</p>
+  </div>
+
+  <div style="flex-grow:1; padding:4px 20px 0; display:flex; flex-direction:column; gap:13px; overflow:hidden;">
+    <div style="background:#ffffff; border:2px solid #b45332; border-radius:16px; padding:17px; display:flex; flex-direction:column; gap:10px;">
+      <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#ffffff; background:#b45332; padding:6px 11px; border-radius:999px;">Best value</span>
+      <p class="serif" style="margin:0; font-size:32px; line-height:1;">SGD 518</p>
+      <p style="margin:0; font-size:15px; color:#6b6157;">Saka House · Ubud</p>
+      <p style="margin:0; font-size:14px; color:#3f6b4a; font-weight:600;">8.8 / 10 · 255 reviews</p>
+      <button style="width:100%; min-height:46px; margin-top:4px; background:#b45332; color:#ffffff; border:0; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer;">See this trip</button>
+    </div>
+
+    <div style="background:#ffffff; border:1px solid #e8e1d6; border-radius:16px; padding:17px; display:flex; flex-direction:column; gap:9px;">
+      <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332; background:#f8ece7; padding:6px 11px; border-radius:999px;">Cheapest</span>
+      <p class="serif" style="margin:0; font-size:28px; line-height:1;">SGD 463</p>
+      <p style="margin:0; font-size:15px; color:#6b6157;">Sandy House · no reviews yet</p>
+    </div>
+
+    <div style="background:#ffffff; border:1px solid #e8e1d6; border-radius:16px; padding:17px; display:flex; flex-direction:column; gap:9px;">
+      <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332; background:#f8ece7; padding:6px 11px; border-radius:999px;">Best reviewed</span>
+      <p class="serif" style="margin:0; font-size:28px; line-height:1;">SGD 601</p>
+      <p style="margin:0; font-size:15px; color:#6b6157;">Lula Boutique · 10 / 10</p>
+    </div>
+
+    <p style="margin:4px 0 0; font-size:14px; color:#9a9086; text-align:center;">All three fly Scoot, SIN → DPS.</p>
+  </div>
+
+  <div style="padding:13px 18px 30px; border-top:1px solid #e8e1d6; background:#ffffff; display:flex; align-items:center; gap:12px;">
+    <button style="width:52px; height:52px; flex:none; border-radius:999px; border:0; background:#b45332; color:#ffffff; display:flex; align-items:center; justify-content:center;">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+    </button>
+    <span style="flex-grow:1; font-size:15px; color:#9a9086;">Ask anything…</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

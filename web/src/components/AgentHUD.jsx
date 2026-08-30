@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 
-/** What the agent is doing, while it does it.
+/** What the agent is doing, step by step, while it does it.
  *
- *  Every line here is a real tool call streamed from the server — the plane
- *  advances one leg per completed call, so the motion means something rather
- *  than being decoration over a spinner.
+ *  Every line is a real tool call: what was asked for, what came back, and how
+ *  long it took. The plane advances one leg per completed call, so the motion
+ *  reports progress rather than decorating a wait.
  */
 
-// tool.capability -> how to describe it to a traveller, and which glyph
+// tool.capability -> how to say it to a traveller, and which glyph
 const STEPS = {
   'locale.detect_locale':          ['Working out where you are', 'pin'],
   'places.nearest_airports':       ['Finding your nearest airport', 'tower'],
@@ -25,6 +25,11 @@ const STEPS = {
   'imagery.find_photos':           ['Finding pictures nearby', 'camera'],
   'flight_status.check_delays':    ['Checking for delays', 'plane'],
 }
+
+// Which arguments are worth showing, in the order a person would say them.
+const SHOW_PARAMS = ['origin', 'destination', 'place', 'query', 'name', 'around',
+                     'depart', 'check_in', 'check_out', 'return_date', 'trip_nights',
+                     'adults', 'needs', 'currency', 'flex_days', 'radius_m', 'lat', 'lon']
 
 const stroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7,
                  strokeLinecap: 'round', strokeLinejoin: 'round' }
@@ -47,11 +52,21 @@ function Glyph({ kind, size = 15 }) {
   )
 }
 
-/** The result count a step turned up, when it found anything. */
-function countOf(step) {
-  if (step.result_count > 0) return step.result_count
-  const m = (step.summary || '').match(/\b(\d+)\b/)
-  return m ? Number(m[1]) : null
+/** The call's arguments, as a person would read them back. */
+function argsOf(step) {
+  const p = step.params || {}
+  const parts = []
+  if (p.origin && p.destination) parts.push(`${p.origin} → ${p.destination}`)
+  for (const key of SHOW_PARAMS) {
+    if ((key === 'origin' || key === 'destination') && p.origin && p.destination) continue
+    const v = p[key]
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue
+    if (key === 'lat' || key === 'lon') continue          // shown as a pair below
+    parts.push(Array.isArray(v) ? v.join(', ') : String(v))
+    if (parts.length === 4) break
+  }
+  if (p.lat != null && p.lon != null) parts.push(`${Number(p.lat).toFixed(2)}, ${Number(p.lon).toFixed(2)}`)
+  return parts.join(' · ')
 }
 
 export default function AgentHUD({ steps, done, stopping = false }) {
@@ -65,40 +80,41 @@ export default function AgentHUD({ steps, done, stopping = false }) {
 
   const calls = steps.filter((s) => s.kind === 'tool_call')
   const failed = calls.filter((s) => s.status === 'error' || s.status === 'no_results')
-
-  // The plane never claims to have arrived until the plan is actually done:
-  // each completed leg closes part of the remaining distance.
   const progress = done ? 1 : 1 - 1 / (calls.length + 1.6)
 
   return (
     <section className="hud" aria-live="polite" aria-busy={!done}>
-      <div className="hud-route" role="img"
-           aria-label={`Planning: ${calls.length} lookups so far`}>
+      <div className="hud-route" role="img" aria-label={`${calls.length} lookups so far`}>
         <span className="hud-dot is-origin" />
-        <span className="hud-line">
-          <span className="hud-trail" style={{ width: `${progress * 100}%` }} />
-        </span>
+        <span className="hud-line"><span className="hud-trail" style={{ width: `${progress * 100}%` }} /></span>
         <span className="hud-dot is-dest" />
-        <span className="hud-plane" style={{ left: `${progress * 100}%` }}>
-          <Glyph kind="plane" size={19} />
-        </span>
+        <span className="hud-plane" style={{ left: `${progress * 100}%` }}><Glyph kind="plane" size={19} /></span>
       </div>
 
       <ol className="hud-steps">
         {calls.map((step, i) => {
           const key = `${step.tool}.${step.capability}`
           const [label, glyph] = STEPS[key] || [key.replace(/[._]/g, ' '), 'pin']
-          const last = i === calls.length - 1
+          const live = i === calls.length - 1 && !done
           const bad = step.status === 'error' || step.status === 'no_results'
-          const n = countOf(step)
+          const args = argsOf(step)
+          const auto = (step.summary || '').startsWith('[auto]')
+          const said = (step.summary || '').replace('[auto] ', '')
+
           return (
-            <li key={`${key}-${i}`}
-                className={`hud-step${last && !done ? ' is-live' : ''}${bad ? ' is-empty' : ''}`}>
+            <li key={`${key}-${i}`} className={`hud-step${live ? ' is-live' : ''}${bad ? ' is-empty' : ''}`}>
               <span className="hud-glyph"><Glyph kind={glyph} /></span>
-              <span className="hud-label">{label}</span>
-              <span className="hud-count">
-                {bad ? 'nothing found' : n != null ? `${n} found` : 'done'}
-              </span>
+              <div className="hud-detail">
+                <p className="hud-line-1">
+                  <span className="hud-label">{label}</span>
+                  {auto && <span className="badge tiny">guaranteed</span>}
+                  <span className="hud-ms">{(step.duration_ms / 1000).toFixed(1)}s</span>
+                </p>
+                <p className="mono hud-call">
+                  {step.tool}.{step.capability}{args ? ` — ${args}` : ''}
+                </p>
+                {said && <p className="hud-said">{said}</p>}
+              </div>
             </li>
           )
         })}
@@ -106,20 +122,23 @@ export default function AgentHUD({ steps, done, stopping = false }) {
         {!done && (
           <li className={`hud-step is-pending${stopping ? ' is-stopping' : ''}`}>
             <span className="hud-glyph"><span className="hud-pulse" /></span>
-            <span className="hud-label">
-              {stopping ? 'Stopping — finishing the call already in flight'
-                : calls.length ? 'Working out what to recommend'
-                : 'Getting started'}
-            </span>
-            <span className="hud-count">{elapsed.toFixed(1)}s</span>
+            <div className="hud-detail">
+              <p className="hud-line-1">
+                <span className="hud-label">
+                  {stopping ? 'Stopping — finishing the call already in flight'
+                    : calls.length ? 'Working out what to recommend'
+                    : 'Getting started'}
+                </span>
+                <span className="hud-ms">{elapsed.toFixed(1)}s</span>
+              </p>
+            </div>
           </li>
         )}
       </ol>
 
       {failed.length > 0 && (
         <p className="hud-note">
-          {failed.length} source{failed.length > 1 ? 's' : ''} had nothing — you'll see
-          exactly which.
+          {failed.length} source{failed.length > 1 ? 's' : ''} had nothing — you'll see exactly which.
         </p>
       )}
     </section>

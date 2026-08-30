@@ -19,6 +19,8 @@ import ComboCard from './components/ComboCard'
 import TripDetail from './components/TripDetail'
 import NeedsBar from './components/NeedsBar'
 import ChatThread from './components/ChatThread'
+import ChosenTrip from './components/ChosenTrip'
+import TripStrip from './components/TripStrip'
 import TracePanel from './components/TracePanel'
 import { Pin, Crosshair } from './components/Icons'
 
@@ -57,6 +59,11 @@ export default function App() {
   // The visible conversation. The agent keeps its own history server-side;
   // this is what the traveller can actually read.
   const [messages, setMessages] = useState([])
+  // One decision per step: choose a trip, refine it, then talk about it.
+  // 'choose' shows only the options; 'refine' opens the one picked and only
+  // then offers the dates; 'ask' folds it to a strip so the reply has room.
+  const [stage, setStage] = useState('choose')
+  const [chosen, setChosen] = useState(null)
 
   const voice = useVoice({ enabled: voiceOut })
   const { locale, origin, airports } = useLocale()
@@ -81,7 +88,9 @@ export default function App() {
     setLiveSteps([])
     setConversing(true)
     setPreviewDate(null)
+    if (chosen) setStage('ask')
     setMessages((prev) => [...prev, { role: 'user', text: request }])
+    if (!chosen) setStage('choose')
     // The HUD used to render below the fold, so nothing appeared to happen.
     window.scrollTo({ top: 0, behavior: 'smooth' })
     const controller = new AbortController()
@@ -123,13 +132,24 @@ export default function App() {
       setStopping(false)
       abortRef.current = null
     }
-  }, [brief, busy, voice, voiceOut, locale, origin, sessionId])
+  }, [brief, busy, voice, voiceOut, locale, origin, sessionId, needs, result, chosen])
 
   /** Ask a follow-up. Clears the box so the thread is the record, not the input. */
   const ask = useCallback((question) => {
     setBrief('')
     run(question, { spoken: voiceOut })
   }, [run, voiceOut])
+
+  const choose = useCallback((combo) => {
+    setChosen(combo)
+    setStage('refine')
+  }, [])
+
+  const stepBack = useCallback(() => {
+    if (stage === 'ask') { setStage('refine'); return }
+    setChosen(null)
+    setStage('choose')
+  }, [stage])
 
   /** Interrupt the run. Whatever was found so far is kept. */
   const stop = useCallback(async () => {
@@ -147,6 +167,8 @@ export default function App() {
     setBrief('')
     setConversing(false)
     setMessages([])
+    setChosen(null)
+    setStage('choose')
   }, [sessionId])
 
   const onTranscript = useCallback((text) => {
@@ -159,14 +181,15 @@ export default function App() {
 
   // Previewing a date re-prices the options on screen from windows we already
   // paid for, so comparing dates costs nothing.
-  const combos = (result?.combos || []).map((c) => {
+  const repriced = (c) => {
     if (!previewDate || previewDate === anchorDate) return c
     const w = (trip?.windows || []).find((x) => x.depart === previewDate)
     if (!w || !c.includes_flight) return c
     return { ...c, flight_price: w.price_total,
              total: Math.round((w.price_total + c.hotel_price) * 100) / 100,
              previewing: previewDate }
-  })
+  }
+  const combos = (result?.combos || []).map(repriced)
 
   return (
     <div className={`app${conversing ? ' is-conversing' : ''}`}>
@@ -293,41 +316,65 @@ export default function App() {
         {/* ── answer ──────────────────────────────────────── */}
         {result && (
           <div className="results" ref={resultsRef}>
-            {combos.length > 0 && (
-              <div className="combos">
-                {combos.map((c) => (
-                  <ComboCard key={c.label} combo={c}
-                             onOpen={() => setOpenCombo(c)}
-                             onAsk={(q) => ask(q)} />
-                ))}
-              </div>
+            {/* Step 1 — which trip? Nothing else competes with the question. */}
+            {stage === 'choose' && combos.length > 0 && (
+              <>
+                <div className="step-head">
+                  <p className="mono eyebrow">
+                    Step 1 of 3{trip?.nights ? ` · ${trip.nights} nights` : ''}
+                    {trip?.passengers > 1 ? `, ${trip.passengers} adults` : ''}
+                  </p>
+                  <h2 className="serif step-question">Which trip?</h2>
+                  <p className="step-note">
+                    Every price is the whole trip — {combos[0]?.includes_flight
+                      ? 'both fares and every night' : 'the stay in full'}.
+                  </p>
+                </div>
+                <div className="combos">
+                  {combos.map((c) => (
+                    <ComboCard key={c.label} combo={c}
+                               onOpen={() => choose(c)}
+                               onChoose={() => choose(c)}
+                               onAsk={ask} />
+                  ))}
+                </div>
+              </>
             )}
 
-            <ChatThread messages={messages} busy={busy} onAsk={ask}
-                        onBookFlight={(card) => {
-                          const full = trip?.flight
-                          if (full) setBooking(full)
-                        }}
-                        onOpenStay={(card) => {
-                          const full = (result.artifacts?.hotels || [])
-                            .find((h) => h.hotel_id === card.hotel_id)
-                          if (full) setOpenHotel(full)
-                        }}
-                        suggestions={result.follow_ups?.length
-                          ? result.follow_ups : followUps(combos, trip)} />
+            {/* Step 2 — the one picked, and only now the dates. */}
+            {stage === 'refine' && chosen && (
+              <>
+                <ChosenTrip combo={repriced(chosen)} otherCount={combos.length}
+                            onBack={stepBack}
+                            onBookFlight={(f) => setBooking(f)}
+                            onOpenStay={(h) => setOpenHotel(h)} />
 
-            {trip?.windows?.length > 0 && (
-              <DateWindows
-                windows={trip.windows}
-                anchor={anchorDate}
-                hotelPrice={trip.hotel_price || 0}
-                selected={previewDate || anchorDate}
-                onPreview={(w) => setPreviewDate(w.depart)}
-                onUse={(w) => {
-                  const q = `Use ${w.depart}${w.return_date ? ` to ${w.return_date}` : ''} instead`
-                  setBrief(q); run(q, { spoken: false })
-                }}
-              />
+                {trip?.windows?.length > 0 && (
+                  <DateWindows
+                    windows={trip.windows}
+                    anchor={anchorDate}
+                    hotelPrice={chosen.hotel_price || 0}
+                    selected={previewDate || anchorDate}
+                    onPreview={(w) => setPreviewDate(w.depart)}
+                    onUse={(w) => ask(`Use ${w.depart}${w.return_date ? ` to ${w.return_date}` : ''} instead`)}
+                  />
+                )}
+              </>
+            )}
+
+            {/* Step 3 — the conversation, with the trip out of the way. */}
+            {stage === 'ask' && chosen && <TripStrip combo={repriced(chosen)} onBack={stepBack} />}
+
+            {(stage === 'ask' || messages.length > 2) && (
+              <ChatThread messages={messages} busy={busy} onAsk={ask}
+                          onBookFlight={() => { if (trip?.flight) setBooking(trip.flight) }}
+                          onOpenStay={(card) => {
+                            const full = (result.artifacts?.hotels || [])
+                              .find((h) => h.hotel_id === card.hotel_id)
+                            if (full) setOpenHotel(full)
+                          }}
+                          suggestions={result.follow_ups?.length
+                            ? result.follow_ups : followUps(combos, trip)} />
             )}
 
             <details className="work" open={showWork}

@@ -31,11 +31,28 @@ function renderLine(line, i) {
   return <p key={i} className="answer-p">{inline(trimmed)}</p>
 }
 
-/** Turns **bold** into elements; everything else stays plain text. */
+const INLINE = /(\*\*[^*]+\*\*|!?\[[^\]]*\]\([^)\s]+\))/g
+const LINK = /^(!?)\[([^\]]*)\]\(([^)\s]+)\)$/
+
+/** Bold and links become elements; everything else stays plain text.
+ *  A link to anywhere we do not recognise renders as its label alone rather
+ *  than spilling a raw URL into the sentence. */
 function inline(text) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**')
-      ? <strong key={i}>{part.slice(2, -2)}</strong>
-      : part
-  )
+  return text.split(INLINE).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>
+    }
+    const link = part.match(LINK)
+    if (link) {
+      const [, bang, label, href] = link
+      if (bang) return null                       // inline images belong on their own line
+      if (!SAFE_SRC.test(href)) return label      // label only, never the bare URL
+      return (
+        <a key={i} href={href} target="_blank" rel="noreferrer noopener">
+          {label || href}
+        </a>
+      )
+    }
+    return part
+  })
 }

@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin:0; font-family:Karla,"Helvetica Neue",Arial,sans-serif; }
+    a { color:#e08a68; text-decoration:none; } a:hover { color:#f0ebe3; }
+    .serif { font-family:Newsreader,Georgia,serif; font-weight:400; letter-spacing:-0.015em; }
+    .mono { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+  </style>
+</helmet>
+<div style="width:980px; height:720px; background:#faf7f2; color:#241f1a; padding:34px 36px; display:flex; flex-direction:column; gap:22px;">
+  <div>
+    <p class="mono" style="margin:0 0 9px; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">The legibility fix</p>
+    <h2 class="serif" style="margin:0 0 8px; font-size:30px;">A ramp with a floor</h2>
+    <p style="margin:0; font-size:16px; line-height:1.6; color:#6b6157; max-width:620px;">58 of the 71 sizes in the stylesheet were under 14px and 21 were 12px or smaller. Below is what each role becomes.</p>
+  </div>
+
+  <div style="display:grid; grid-template-columns:150px 130px minmax(0,1fr); gap:0; background:#ffffff; border:1px solid #e8e1d6; border-radius:16px; overflow:hidden;">
+    <div style="padding:13px 18px; background:#f3eee6; font-size:14px; font-weight:600; color:#6b6157;">Role</div>
+    <div style="padding:13px 18px; background:#f3eee6; font-size:14px; font-weight:600; color:#6b6157;">Was → is</div>
+    <div style="padding:13px 18px; background:#f3eee6; font-size:14px; font-weight:600; color:#6b6157;">At the new size</div>
+
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px;">Price, hero</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px; color:#6b6157;">30 → 34</div>
+    <div style="padding:11px 18px; border-top:1px solid #e8e1d6;"><span class="serif" style="font-size:34px;">SGD 518</span></div>
+
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px;">Heading</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px; color:#6b6157;">21 → 26</div>
+    <div style="padding:13px 18px; border-top:1px solid #e8e1d6;"><span class="serif" style="font-size:26px;">Saka House, Ubud</span></div>
+
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px;">Body</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px; color:#6b6157;">14.5 → 17</div>
+    <div style="padding:14px 18px; border-top:1px solid #e8e1d6; font-size:17px; line-height:1.6;">Guests mention birdsong rather than traffic.</div>
+
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px;">Secondary</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px; color:#6b6157;">12.5 → 15</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px; color:#6b6157;">4 nights · SGD 25 a night</div>
+
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px;">Meta</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px; color:#6b6157;">11.5 → 13.5</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:13.5px; color:#9a9086;">28 Sep · 2h 45m</div>
+
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px;">Label <span style="color:#b45332;">— the floor</span></div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6; font-size:15px; color:#6b6157;">10 → 12</div>
+    <div style="padding:15px 18px; border-top:1px solid #e8e1d6;"><span class="mono" style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Projected total</span></div>
+  </div>
+
+  <p style="margin:0; font-size:16px; line-height:1.6; color:#6b6157; max-width:740px;">Nothing below 12px, and 12px only for uppercase mono labels where the tracking carries it. Every control is at least 44px tall.</p>
+</div>
+</x-dc>
+</body>
+</html>

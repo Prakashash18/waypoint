@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin:0; font-family:Karla,"Helvetica Neue",Arial,sans-serif; }
+    a { color:#b45332; text-decoration:none; } a:hover { color:#241f1a; }
+    .serif { font-family:Newsreader,Georgia,serif; font-weight:400; letter-spacing:-0.015em; }
+    .mono { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+    .box { border:1px dashed #c9bfb0; border-radius:12px; background:#ffffff; }
+  </style>
+</helmet>
+
+<div style="width:1180px; height:880px; background:#faf7f2; color:#241f1a; padding:30px; display:flex; flex-direction:column; gap:16px;">
+
+  <div>
+    <p class="mono" style="margin:0 0 8px; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Alternate · everything at once, but readable</p>
+    <h2 class="serif" style="margin:0 0 6px; font-size:26px;">One screen, bigger type</h2>
+    <p style="margin:0; font-size:16px; line-height:1.6; color:#6b6157; max-width:700px;">Keeps today's layout and only fixes the type. Nothing is hidden, so an experienced traveller compares everything without clicking — but a first-time one still meets four decisions at once.</p>
+  </div>
+
+  <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px;">
+    <div class="box" style="padding:16px; display:flex; flex-direction:column; gap:8px;">
+      <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332;">Cheapest</span>
+      <p class="serif" style="margin:0; font-size:30px;">SGD 463</p>
+      <p style="margin:0; font-size:15px; color:#6b6157;">Sandy House</p>
+    </div>
+    <div class="box" style="padding:16px; display:flex; flex-direction:column; gap:8px; border-style:solid; border-color:#b45332;">
+      <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332;">Best value</span>
+      <p class="serif" style="margin:0; font-size:30px;">SGD 518</p>
+      <p style="margin:0; font-size:15px; color:#6b6157;">Saka House · 8.8</p>
+    </div>
+    <div class="box" style="padding:16px; display:flex; flex-direction:column; gap:8px;">
+      <span class="mono" style="align-self:flex-start; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332;">Best reviewed</span>
+      <p class="serif" style="margin:0; font-size:30px;">SGD 601</p>
+      <p style="margin:0; font-size:15px; color:#6b6157;">Lula Boutique · 10</p>
+    </div>
+  </div>
+
+  <div class="box" style="padding:16px 18px;">
+    <p class="mono" style="margin:0 0 12px; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Dates</p>
+    <div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px;">
+      <div style="padding:12px; border:1px solid #e8e1d6; border-radius:9px; font-size:15px;">26 Sep<br><strong style="font-size:19px;">528</strong></div>
+      <div style="padding:12px; border:1px solid #3f6b4a; border-radius:9px; font-size:15px;">27 Sep<br><strong style="font-size:19px;">463</strong></div>
+      <div style="padding:12px; border:2px solid #b45332; border-radius:9px; font-size:15px;">28 Sep<br><strong style="font-size:19px;">518</strong></div>
+      <div style="padding:12px; border:1px solid #e8e1d6; border-radius:9px; font-size:15px;">29 Sep<br><strong style="font-size:19px;">523</strong></div>
+      <div style="padding:12px; border:1px solid #e8e1d6; border-radius:9px; font-size:15px;">30 Sep<br><strong style="font-size:19px;">640</strong></div>
+    </div>
+  </div>
+
+  <div class="box" style="padding:16px 18px; flex-grow:1;">
+    <p class="mono" style="margin:0 0 10px; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Conversation</p>
+    <p style="margin:0 0 10px; font-size:17px; line-height:1.6; color:#6b6157;">Reply text sits here, with its cards beneath.</p>
+    <div style="display:flex; gap:10px;">
+      <div style="width:190px; height:74px; border:1px dashed #c9bfb0; border-radius:9px;"></div>
+      <div style="width:190px; height:74px; border:1px dashed #c9bfb0; border-radius:9px;"></div>
+    </div>
+  </div>
+
+  <div class="box" style="padding:14px 18px; display:flex; align-items:center; gap:12px;">
+    <div style="width:44px; height:44px; border-radius:999px; background:#f3eee6;"></div>
+    <span style="flex-grow:1; font-size:16px; color:#9a9086;">Ask anything…</span>
+    <div style="padding:12px 22px; border:1px solid #e8e1d6; border-radius:10px; font-size:16px; font-weight:600;">Enter</div>
+  </div>
+
+  <p style="margin:0; font-size:15px; color:#9a9086;"><strong style="color:#241f1a;">Tradeoff:</strong> nothing to learn, nothing hidden — but the page still asks four questions at once, which is the complaint.</p>
+</div>
+</x-dc>
+</body>
+</html>

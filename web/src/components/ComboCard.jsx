@@ -6,7 +6,7 @@ import { Plane, External } from './Icons'
  *  A traveller is choosing between trips, not between components, so the total
  *  leads and the parts sit underneath. Everything else waits to be asked for.
  */
-export default function ComboCard({ combo, onOpen, onAsk }) {
+export default function ComboCard({ combo, onOpen, onChoose, onAsk }) {
   const { hotel, flight, currency } = combo
 
   return (
@@ -58,16 +58,9 @@ export default function ComboCard({ combo, onOpen, onAsk }) {
       </p>
 
       <footer className="combo-foot">
-        <button type="button" className="btn-secondary is-small"
-                onClick={() => onAsk(
-                  `Tell me more about ${hotel.name}${hotel.area ? ` in ${hotel.area}` : ''}` +
-                  ` — what is it actually like, and what is nearby?`)}>
-          Ask about this
+        <button type="button" className="btn-primary is-choose" onClick={onChoose}>
+          See this trip
         </button>
-        <a className="btn-secondary is-small" href={hotel.booking_url || hotel.website || '#'}
-           target="_blank" rel="noreferrer noopener">
-          Book the stay <External size={13} />
-        </a>
       </footer>
     </article>
   )

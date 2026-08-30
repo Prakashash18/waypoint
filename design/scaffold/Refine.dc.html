@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin:0; font-family:Karla,"Helvetica Neue",Arial,sans-serif; }
+    a { color:#b45332; text-decoration:none; } a:hover { color:#241f1a; }
+    .serif { font-family:Newsreader,Georgia,serif; font-weight:400; letter-spacing:-0.015em; }
+    .mono { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+  </style>
+</helmet>
+<div style="width:1180px; height:880px; background:#faf7f2; color:#241f1a; display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; gap:16px; padding:17px 30px; border-bottom:1px solid #e8e1d6; background:#ffffff;">
+    <button style="display:flex; align-items:center; gap:9px; min-height:44px; padding:10px 15px 10px 11px; background:transparent; border:1px solid #e8e1d6; border-radius:999px; font:600 15px Karla,sans-serif; color:#241f1a; cursor:pointer;">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"/></svg>
+      All three options
+    </button>
+    <span class="mono" style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Step 2 of 3 · Refine</span>
+  </div>
+
+  <div style="flex-grow:1; padding:28px 30px 0; display:flex; flex-direction:column; gap:20px; overflow:hidden;">
+
+    <!-- the one trip being considered -->
+    <div style="background:#ffffff; border:1px solid #e8e1d6; border-radius:16px; box-shadow:0 1px 2px rgba(36,31,26,.05), 0 10px 26px rgba(36,31,26,.05); overflow:hidden; display:grid; grid-template-columns:300px minmax(0,1fr);">
+      <img src="saka_house.jpg" alt="Saka House, Ubud" style="width:100%; height:100%; object-fit:cover; display:block;">
+      <div style="padding:22px 24px; display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:20px;">
+          <div>
+            <span class="mono" style="font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:#b45332;">Best value</span>
+            <h2 class="serif" style="margin:7px 0 5px; font-size:26px;">Saka House, Ubud</h2>
+            <p style="margin:0; font-size:15px; color:#3f6b4a; font-weight:600;">8.8 / 10 · 255 reviews</p>
+          </div>
+          <div style="text-align:right;">
+            <p class="serif" style="margin:0; font-size:34px; line-height:1;">SGD 518</p>
+            <p style="margin:6px 0 0; font-size:14px; color:#6b6157;">for two · 4 nights</p>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:26px; padding:15px 0; border-top:1px solid #e8e1d6; border-bottom:1px solid #e8e1d6;">
+          <div>
+            <p style="margin:0 0 5px; font-size:14px; color:#9a9086;">Flights, both fares</p>
+            <p style="margin:0; font-size:22px; font-weight:600;">SGD 418</p>
+            <p style="margin:4px 0 0; font-size:14px; color:#6b6157;">Scoot · SGD 209 each</p>
+          </div>
+          <div>
+            <p style="margin:0 0 5px; font-size:14px; color:#9a9086;">Stay, 4 nights</p>
+            <p style="margin:0; font-size:22px; font-weight:600;">SGD 100</p>
+            <p style="margin:4px 0 0; font-size:14px; color:#6b6157;">SGD 25 a night</p>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:11px; margin-top:auto;">
+          <button style="flex-grow:1; min-height:48px; background:#b45332; color:#ffffff; border:0; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px;">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+            Book the flight by voice
+          </button>
+          <button style="flex-grow:1; min-height:48px; background:#f3eee6; color:#241f1a; border:1px solid #e8e1d6; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer;">Book the stay ↗</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- the second decision, and only now -->
+    <div style="background:#ffffff; border:1px solid #e8e1d6; border-radius:16px; padding:18px 22px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:14px;">
+        <p class="mono" style="margin:0; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#9a9086;">Could you shift the dates?</p>
+        <p style="margin:0; font-size:15px; font-weight:600; color:#3f6b4a;">Leaving the 27th saves SGD 55</p>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:11px;">
+        <button style="padding:14px 15px; border:1px solid #e8e1d6; border-radius:11px; background:transparent; text-align:left; cursor:pointer; min-height:44px;">
+          <p style="margin:0 0 6px; font-size:14px; color:#6b6157;">26 – 30 Sep</p>
+          <p style="margin:0; font-size:21px; font-weight:700;">SGD 528</p>
+        </button>
+        <button style="padding:14px 15px; border:1px solid #3f6b4a; background:#f8ece7; border-radius:11px; text-align:left; cursor:pointer; min-height:44px;">
+          <p style="margin:0 0 6px; font-size:14px; color:#6b6157;">27 Sep – 1 Oct</p>
+          <p style="margin:0; font-size:21px; font-weight:700;">SGD 463</p>
+        </button>
+        <button style="padding:14px 15px; border:2px solid #b45332; background:#f3eee6; border-radius:11px; text-align:left; cursor:pointer; min-height:44px;">
+          <p style="margin:0 0 6px; font-size:14px; color:#241f1a; font-weight:600;">28 Sep – 2 Oct</p>
+          <p style="margin:0; font-size:21px; font-weight:700;">SGD 518</p>
+        </button>
+        <button style="padding:14px 15px; border:1px solid #e8e1d6; border-radius:11px; background:transparent; text-align:left; cursor:pointer; min-height:44px;">
+          <p style="margin:0 0 6px; font-size:14px; color:#6b6157;">29 Sep – 3 Oct</p>
+          <p style="margin:0; font-size:21px; font-weight:700;">SGD 523</p>
+        </button>
+        <button style="padding:14px 15px; border:1px solid #e8e1d6; border-radius:11px; background:transparent; text-align:left; cursor:pointer; min-height:44px;">
+          <p style="margin:0 0 6px; font-size:14px; color:#6b6157;">30 Sep – 4 Oct</p>
+          <p style="margin:0; font-size:21px; font-weight:700;">SGD 640</p>
+        </button>
+      </div>
+      <p style="margin:13px 0 0; font-size:14px; color:#9a9086;">Tapping a date re-prices the trip above. Nothing is searched until you ask.</p>
+    </div>
+
+    <!-- everything not chosen, folded away -->
+    <button style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:16px 22px; background:transparent; border:1px solid #e8e1d6; border-radius:16px; cursor:pointer; min-height:44px;">
+      <span style="font-size:16px; color:#6b6157;">The other two options, and how we found these</span>
+      <span style="font-size:19px; color:#9a9086;">›</span>
+    </button>
+  </div>
+
+  <div style="padding:16px 30px 22px; border-top:1px solid #e8e1d6; background:#ffffff; display:flex; align-items:center; gap:14px;">
+    <button style="width:52px; height:52px; flex:none; border-radius:999px; border:0; background:#b45332; color:#ffffff; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+    </button>
+    <span style="flex-grow:1; font-size:16px; color:#9a9086;">Is Saka House quiet at night?</span>
+    <button style="min-height:46px; padding:13px 24px; background:#f3eee6; color:#241f1a; border:1px solid #e8e1d6; border-radius:11px; font:600 16px Karla,sans-serif; cursor:pointer;">Enter</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

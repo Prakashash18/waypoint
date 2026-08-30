@@ -1,0 +1,4 @@
+Type ramp used across every artboard (the fix for 58/71 sizes under 14px):
+  display serif 40 · price-lg serif 34 · h2 serif 26 · price 22
+  body 17/1.6 · secondary 15/1.5 · meta 13.5 · label 12 mono .14em  <- absolute floor
+Controls never below 44px. Tokens lifted from web/src/styles.css.

@@ -1,0 +1,20 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",         "x": 0,    "y": 0,    "w": 1180, "h": 880, "title": "Step 1 — Which trip?" },
+    { "file": "Refine.dc.html",       "x": 1280, "y": 0,    "w": 1180, "h": 880, "title": "Step 2 — Refine the one you picked" },
+    { "file": "Converse.dc.html",     "x": 2560, "y": 0,    "w": 1180, "h": 880, "title": "Step 3 — Ask about it (dark)" },
+    { "file": "MobileChoose.dc.html", "x": 0,    "y": 1060, "w": 390,  "h": 844, "title": "Step 1 — phone" },
+    { "file": "MobileRefine.dc.html", "x": 490,  "y": 1060, "w": 390,  "h": 844, "title": "Step 2 — phone" },
+    { "file": "TypeScale.dc.html",    "x": 980,  "y": 1060, "w": 980,  "h": 720, "title": "The type ramp" },
+    { "file": "AltOneScreen.dc.html", "x": 2060, "y": 1060, "w": 1180, "h": 880, "title": "Alternate — one screen" }
+  ],
+  "annotations": [
+    { "id": "scaffold", "x": 0, "y": -210, "w": 620,
+      "text": "The scaffold: one decision per step.\n\nStep 1 asks only which trip. Step 2 opens the one you chose and only then offers the dates. Step 3 is the conversation, with the trip reduced to a strip so the answer has the room.\n\nEverything not being decided is folded into a single row you can open." },
+    { "id": "legibility", "x": 980, "y": 850, "w": 520,
+      "text": "58 of 71 sizes in the stylesheet were under 14px and 21 were 12px or smaller. The ramp puts the floor at 12px, and only for uppercase mono labels where the tracking carries it. Body goes 14.5 → 17." },
+    { "id": "alt", "x": 2060, "y": 850, "w": 520,
+      "text": "The alternate keeps today's single screen and fixes only the type. Worth a look if you would rather not add steps — but it does not answer the 'too much at once' half of the complaint." }
+  ],
+  "launch": { "view": "canvas" }
+}
