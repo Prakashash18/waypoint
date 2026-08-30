@@ -859,33 +859,138 @@ def booking_prepare():
                 note('baggage', 'Price the luggage', False, bags.message)
             else:
                 options = bags.get_data('options', []) or []
+                # Baggage is sold per traveller per leg, but a traveller thinks
+                # in whole trips: "20kg, there and back". So group by weight and
+                # keep the cheapest bag on each leg, carrying the ids a
+                # selection needs — the sheet could not pick anything while
+                # those were being dropped.
                 by_weight = {}
                 for opt in options:
-                    key = opt.get('weight_kg')
-                    if key not in by_weight or opt.get('price', 1e9) < by_weight[key]['price']:
-                        by_weight[key] = {'weight_kg': key, 'price': opt.get('price'),
-                                          'currency': opt.get('currency', 'USD'),
-                                          'baggage_id': opt.get('baggage_id')}
-                rows = sorted(by_weight.values(), key=lambda o: o['price'] or 0)
+                    kg = opt.get('weight_kg')
+                    seg = opt.get('segment_id')
+                    if kg is None or not seg:
+                        continue
+                    row = by_weight.setdefault(kg, {
+                        'weight_kg': kg, 'currency': opt.get('currency', 'USD'),
+                        'category': opt.get('category', ''), 'legs': {}})
+                    prev = row['legs'].get(seg)
+                    if prev is None or (opt.get('price') or 0) < prev['price']:
+                        row['legs'][seg] = {'segment_id': seg,
+                                            'baggage_id': opt.get('baggage_id'),
+                                            'price': opt.get('price') or 0}
+
+                rows = []
+                for row in by_weight.values():
+                    legs = list(row['legs'].values())
+                    rows.append({'weight_kg': row['weight_kg'],
+                                 'currency': row['currency'],
+                                 'category': row['category'],
+                                 'legs': legs,
+                                 # What one traveller pays to carry this bag
+                                 # on every leg of the trip.
+                                 'price': round(sum(l['price'] for l in legs), 2)})
+                rows.sort(key=lambda o: o['price'] or 0)
                 note('baggage', 'Price the luggage', True,
                      (f'{len(rows)} checked-bag options from '
-                      f'{rows[0]["currency"]} {rows[0]["price"]:.2f}' if rows
-                      else 'Cabin baggage only — no checked bags offered'),
+                      f'{rows[0]["currency"]} {rows[0]["price"]:.2f} per traveller'
+                      if rows else 'Cabin baggage only — no checked bags offered'),
                      options=rows)
 
+        travellers = verified.get_data('travelers', []) or []
+        segments = verified.get_data('segments', []) or []
+        required = (verified.get_data('requirements', {}) or {}).get('required_fields', [])
+
         note('passengers', 'Enter passenger details', True,
-             'Names, dates of birth and contact details — not collected here')
+             'Full name, date of birth and contact details — asked for next',
+             required_fields=required, travelers=travellers)
         note('pay', 'Pay and issue the ticket', True,
              'The final step. Nothing has been charged.')
 
         return jsonify({'success': True, 'steps': steps, 'booking_id': booking_id,
                         'confirmed_total': confirmed,
-                        'note': ('Everything above really ran against the airline. '
-                                 'Passenger details and payment are not wired up.')})
+                        'travelers': travellers, 'segments': segments,
+                        'required_fields': required,
+                        'note': ('Everything above really ran against the airline.')})
     except Exception as exc:
         app.logger.exception('booking prepare failed')
         note('error', 'Preparing the booking', False, str(exc))
         return jsonify({'success': False, 'steps': steps, 'error': str(exc)}), 200
+
+
+@app.route('/api/booking/baggage', methods=['POST'])
+def booking_baggage():
+    """Add or drop one checked bag, for one traveller, on one leg.
+
+    The sheet used to list baggage prices as plain text with no way to pick
+    one, because the ids that name a bag never reached the browser.
+    """
+    data = request.json or {}
+    booking_id = (data.get('booking_id') or '').strip()
+    traveler_id = (data.get('traveler_id') or '').strip()
+    segment_id = (data.get('segment_id') or '').strip()
+    baggage_id = (data.get('baggage_id') or '').strip()
+    if not booking_id or not traveler_id or not segment_id:
+        return jsonify({'success': False,
+                        'error': 'booking_id, traveler_id and segment_id are required'}), 400
+
+    try:
+        # No baggage_id means "no checked bag" — that is a removal, not a pick.
+        if baggage_id:
+            res = cli.booking_baggage_select(booking_id, traveler_id, segment_id, baggage_id)
+        else:
+            res = cli.booking_baggage_remove(booking_id, traveler_id, segment_id)
+
+        if res.is_error():
+            return jsonify({'success': False, 'error': res.message,
+                            'code': res.code}), 200
+        return jsonify({'success': True, 'selected': res.data or {},
+                        'baggage_id': baggage_id})
+    except Exception as exc:
+        app.logger.exception('baggage selection failed')
+        return jsonify({'success': False, 'error': str(exc)}), 200
+
+
+@app.route('/api/booking/order', methods=['POST'])
+def booking_order():
+    """Create the order from the traveller's own details.
+
+    This is the step that turns a held fare into an order awaiting payment.
+    Atlas answers a created order with action_required/
+    PAYMENT_CONFIRMATION_REQUIRED, which is a success here — the order exists,
+    it is simply not paid. Nothing in this call charges anyone.
+    """
+    data = request.json or {}
+    booking_id = (data.get('booking_id') or '').strip()
+    passengers = data.get('passengers') or []
+    contact = data.get('contact') or {}
+    if not booking_id or not passengers:
+        return jsonify({'success': False,
+                        'error': 'booking_id and passengers are required'}), 400
+
+    try:
+        res = cli.order_create(booking_id, {'passengers': passengers, 'contact': contact})
+        if res.code == 'PASSENGER_INFO_INVALID':
+            # Atlas names the fields it rejected; pass them straight through so
+            # the form can mark them rather than saying "something is wrong".
+            return jsonify({'success': False, 'error': res.message,
+                            'code': res.code,
+                            'fields': (res.details or {}).get('fields', [])}), 200
+        if res.is_error() and res.code != 'PAYMENT_CONFIRMATION_REQUIRED':
+            return jsonify({'success': False, 'error': res.message,
+                            'code': res.code}), 200
+
+        return jsonify({
+            'success': True,
+            'order_no': res.get_data('order_no', ''),
+            'total_price': res.get_data('total_price', None),
+            'currency': res.get_data('currency', ''),
+            'payment_deadline': res.get_data('payment_deadline', ''),
+            'payment_confirmation_id': res.get_data('payment_confirmation_id', ''),
+            'payment_summary': res.get_data('payment_summary', {}) or {},
+        })
+    except Exception as exc:
+        app.logger.exception('order creation failed')
+        return jsonify({'success': False, 'error': str(exc)}), 200
 
 
 @app.route('/api/sources', methods=['GET'])

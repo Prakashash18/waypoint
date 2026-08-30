@@ -21,13 +21,25 @@ class AtlasEnvelope:
     details: Dict[str, Any]
     raw: Dict[str, Any]
     
+    # Atlas answers with one of: success, action_required, terminal_error.
+    # `terminal_error` was in none of the lists below, so a hard failure like
+    # OFFER_EXPIRED read as neither a success nor an error — and callers that
+    # branch on is_error() sailed past it and reported a green tick.
+    ACTION_REQUIRED = 'action_required'
+
     def is_success(self) -> bool:
         """Check if the response indicates success"""
         return self.status == 'success' or self.code in ['SUCCESS', 'OK']
-    
+
     def is_error(self) -> bool:
-        """Check if the response indicates an error"""
-        return self.status == 'error' or self.status == 'failure'
+        """Anything that is neither a success nor a request for more input."""
+        if self.is_success():
+            return False
+        return self.status != self.ACTION_REQUIRED
+
+    def needs_input(self) -> bool:
+        """Not failed — Atlas is waiting on something, like payment or details."""
+        return self.status == self.ACTION_REQUIRED
     
     def is_retryable(self) -> bool:
         """Check if the error is retryable"""

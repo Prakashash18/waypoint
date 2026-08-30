@@ -101,6 +101,9 @@ class CheckpointManager:
         self.selected_option: Optional[RankedOption] = None
         self.booking_id: Optional[str] = None
         self.order_id: Optional[str] = None
+        self.order_no: Optional[str] = None
+        # Supplied by the caller before booking; never invented.
+        self.passenger_details: Optional[Dict[str, Any]] = None
         self.payment_confirmation_id: Optional[str] = None
         self.original_price: Optional[float] = None
         self.confirmed_price: Optional[float] = None
@@ -401,29 +404,35 @@ class CheckpointManager:
         return True
     
     def _create_order(self) -> bool:
-        """Create the order (no checkpoint needed)"""
+        """Create the order from the traveller's own details.
+
+        These used to be a hardcoded "John Doe", which would have put a
+        stranger's name on a real ticket. Nothing is invented here: without
+        real details this refuses to call the airline at all.
+        """
         try:
-            # Note: passenger_details should be provided by the user
-            # For now, using placeholder
-            passenger_details = {
-                "passengers": [{
-                    "title": "Mr",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                    "date_of_birth": "1990-01-01",
-                    "email": "john.doe@example.com",
-                    "phone": "+1234567890"
-                }]
-            }
-            
+            passenger_details = self.passenger_details
+            if not passenger_details or not passenger_details.get('passengers'):
+                self.audit.log_error(
+                    'No passenger details supplied; refusing to create an order.',
+                    'PASSENGER_DETAILS_MISSING', False, None)
+                return False
+
             order_result = self.cli.order_create(self.booking_id, passenger_details)
-            
-            if order_result.is_success():
-                self.order_id = order_result.get_data('order_id')
-                self.payment_confirmation_id = order_result.get_data('payment_confirmation_id')
-                
+
+            # Atlas answers a created order with action_required /
+            # PAYMENT_CONFIRMATION_REQUIRED — the order exists and is awaiting
+            # payment, so treating only `success` as created missed every order.
+            created = (order_result.is_success()
+                       or order_result.code == 'PAYMENT_CONFIRMATION_REQUIRED')
+            if created:
+                self.order_no = order_result.get_data('order_no')
+                self.order_id = self.order_no
+                self.payment_confirmation_id = order_result.get_data(
+                    'payment_confirmation_id')
+
                 self.audit.log_order_created(
-                    self.order_id,
+                    self.order_no,
                     order_result.request_id
                 )
                 
@@ -456,7 +465,7 @@ class CheckpointManager:
                 {'total_amount': self.confirmed_price}
             ),
             what_changed="Ready to issue ticket",
-            cli_command=f"atlas-flight order pay --order-id {self.order_id} --payment-confirmation-id {self.payment_confirmation_id} --json",
+            cli_command=f"atlas-flight order pay --confirmation-id {self.payment_confirmation_id} --json",
             context={
                 'order_id': self.order_id,
                 'amount': self.confirmed_price,
@@ -480,7 +489,7 @@ class CheckpointManager:
     def _execute_payment(self) -> bool:
         """Execute payment and poll for ticket issuance"""
         try:
-            pay_result = self.cli.order_pay(self.order_id, self.payment_confirmation_id)
+            pay_result = self.cli.order_pay(self.payment_confirmation_id)
             
             if pay_result.is_success():
                 self.audit.log_payment_completed(
@@ -514,7 +523,7 @@ class CheckpointManager:
         
         while time.time() - start_time < timeout:
             try:
-                status_result = self.cli.order_status(self.order_id)
+                status_result = self.cli.order_status(self.order_no or self.order_id)
                 
                 if status_result.is_success():
                     status = status_result.get_data('status')

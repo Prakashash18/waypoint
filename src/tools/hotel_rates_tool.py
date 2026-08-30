@@ -535,10 +535,19 @@ class HotelRatesTool(ToolBase):
         if not name:
             return None
 
+        # Booking.com quotes grossPrice BEFORE taxes and charges, and lists the
+        # rest under excludedPrice. Its own website shows the two added together
+        # ("Includes taxes and charges"), and getHotelDetails confirms the sum
+        # is its all_inclusive_amount — verified: 44.48 + 4.45 = 48.93. Showing
+        # the gross figure alone undercut every stay by the local tax rate, so
+        # the traveller met a bigger number at the checkout than on our card.
         gross = ((prop.get('priceBreakdown') or {}).get('grossPrice') or {})
-        total = gross.get('value')
+        base = gross.get('value')
         currency = gross.get('currency', 'USD')
         excluded = ((prop.get('priceBreakdown') or {}).get('excludedPrice') or {}).get('value')
+        total = (base + excluded
+                 if isinstance(base, (int, float)) and isinstance(excluded, (int, float))
+                 else base)
 
         stars = prop.get('accuratePropertyClass') or prop.get('propertyClass') or None
         photos = [p for p in (prop.get('photoUrls') or []) if p]
@@ -561,7 +570,12 @@ class HotelRatesTool(ToolBase):
             'nights': nights,
             'total_price': round(total, 2) if isinstance(total, (int, float)) else None,
             'price_per_night': round(total / nights, 2) if isinstance(total, (int, float)) and nights else None,
-            'taxes_excluded': round(excluded, 2) if isinstance(excluded, (int, float)) else None,
+            # Kept apart so a card can say what the tax portion was.
+            'price_before_tax': round(base, 2) if isinstance(base, (int, float)) else None,
+            'taxes_included': round(excluded, 2) if isinstance(excluded, (int, float)) else None,
+            'price_basis': ('includes taxes and charges'
+                            if isinstance(excluded, (int, float))
+                            else 'as quoted by Booking.com'),
             'currency': currency,
             # Both ends of each window: '00:00' as an until-time means
             # midnight, not the hour you may arrive.

@@ -19,8 +19,12 @@ class AtlasCLI:
         self.timeout = timeout
         self.parser = EnvelopeParser()
         
-    def _execute(self, args: List[str]) -> AtlasEnvelope:
-        """Execute atlas-flight command and return parsed envelope"""
+    def _execute(self, args: List[str], stdin: Optional[str] = None) -> AtlasEnvelope:
+        """Execute atlas-flight command and return parsed envelope.
+
+        `stdin` feeds commands that read a payload rather than take a flag —
+        `order create --passengers-stdin` is the only one today.
+        """
         cmd = ['atlas-flight'] + args
         
         try:
@@ -31,6 +35,7 @@ class AtlasCLI:
                 cmd,
                 capture_output=True,
                 text=True,
+                input=stdin,
                 timeout=self.timeout,
                 env={**os.environ, 'PATH': os.environ.get('PATH', '')}
             )
@@ -158,12 +163,30 @@ class AtlasCLI:
         return self._execute(['booking', 'baggage', 'list',
                               '--booking-id', booking_id, '--json'])
 
-    def booking_baggage(self, booking_id: str, baggage_option: str) -> AtlasEnvelope:
-        """Add baggage to booking"""
+    def booking_baggage_select(self, booking_id: str, traveler_id: str,
+                               segment_id: str, baggage_id: str) -> AtlasEnvelope:
+        """Add one checked bag, for one traveller, on one segment.
+
+        Baggage is priced per traveller per leg, so all four ids are required —
+        the old single `--option` flag was never a thing the CLI accepted.
+        """
         return self._execute([
-            'booking', 'baggage',
+            'booking', 'baggage', 'select',
             '--booking-id', booking_id,
-            '--option', baggage_option,
+            '--traveler-id', traveler_id,
+            '--segment-id', segment_id,
+            '--baggage-id', baggage_id,
+            '--json'
+        ])
+
+    def booking_baggage_remove(self, booking_id: str, traveler_id: str,
+                               segment_id: str) -> AtlasEnvelope:
+        """Drop a bag that was added, so a choice can be changed."""
+        return self._execute([
+            'booking', 'baggage', 'remove',
+            '--booking-id', booking_id,
+            '--traveler-id', traveler_id,
+            '--segment-id', segment_id,
             '--json'
         ])
     
@@ -182,27 +205,25 @@ class AtlasCLI:
         booking_id: str,
         passenger_details: Dict[str, Any]
     ) -> AtlasEnvelope:
-        """Create an order"""
-        # Convert passenger details to JSON string
-        passenger_json = json.dumps(passenger_details)
-        
-        return self._execute([
-            'order', 'create',
-            '--booking-id', booking_id,
-            '--passengers', passenger_json,
-            '--json'
-        ])
+        """Create an order. `passenger_details` is {passengers: [...], contact: {...}}.
+
+        The CLI reads this from stdin; there is no --passengers flag, so the
+        previous form failed before it reached the airline.
+        """
+        return self._execute(
+            ['order', 'create', '--booking-id', booking_id,
+             '--passengers-stdin', '--json'],
+            stdin=json.dumps(passenger_details))
     
-    def order_status(self, order_id: str) -> AtlasEnvelope:
-        """Check order status"""
-        return self._execute(['order', 'status', '--order-id', order_id, '--json'])
+    def order_status(self, order_no: str) -> AtlasEnvelope:
+        """Check order status. The CLI keys on the order number."""
+        return self._execute(['order', 'status', '--order-no', order_no, '--json'])
     
-    def order_pay(self, order_id: str, payment_confirmation_id: str) -> AtlasEnvelope:
-        """Pay for an order"""
+    def order_pay(self, payment_confirmation_id: str) -> AtlasEnvelope:
+        """Pay for an order, using the confirmation id `order create` returned."""
         return self._execute([
             'order', 'pay',
-            '--order-id', order_id,
-            '--payment-confirmation-id', payment_confirmation_id,
+            '--confirmation-id', payment_confirmation_id,
             '--json'
         ])
     

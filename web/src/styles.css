@@ -1020,3 +1020,62 @@ img { max-width: 100%; }
   font-size: 14px; color: var(--dim); white-space: nowrap;
 }
 .meta-unit svg { flex: none; opacity: .8; }
+
+/* ── choosing a bag, and saying who is flying ─────────────────── */
+
+.bagpick { margin: 20px 0 4px; }
+.bagpick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 8px; }
+.bagopt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-width: 92px; padding: 10px 14px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); color: var(--ink);
+  font: inherit; text-align: left;
+}
+.bagopt:hover:not(:disabled) { border-color: var(--accent); }
+.bagopt:disabled { opacity: .55; cursor: progress; }
+.bagopt strong { font-size: 16px; }
+.bagopt span { font-size: 13.5px; color: var(--dim); }
+.bagopt.is-on {
+  border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--accent-wash, var(--surface-2));
+}
+.bagopt.is-on span { color: var(--ink); }
+
+.booking-typed { display: flex; gap: 8px; flex: 1 1 220px; }
+.booking-typed .booking-type { flex: 1; min-width: 0; }
+.booking-said {
+  margin: 10px 0 0; padding: 10px 12px; font-size: 15px;
+  background: var(--surface-2); border-radius: var(--radius-sm); color: var(--ink);
+}
+
+.paxform { margin-top: 20px; }
+.paxrow {
+  margin: 14px 0 0; padding: 14px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.paxrow legend { padding: 0 6px; font: 600 13px/1 var(--sans); color: var(--dim); }
+.paxrow label { display: block; margin-top: 10px; }
+.paxrow label > span {
+  display: block; margin-bottom: 4px; font-size: 13.5px; color: var(--dim);
+}
+.paxrow input, .paxrow select {
+  width: 100%; padding: 10px 12px; font: inherit; font-size: 15px;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 10px;
+}
+.paxrow input:focus, .paxrow select:focus {
+  outline: none; border-color: var(--accent);
+}
+/* The airline named these fields; mark exactly those. */
+.paxrow input.is-bad, .paxrow select.is-bad { border-color: var(--warn, #b4433a); }
+.paxrow-pair { display: flex; flex-wrap: wrap; gap: 12px; }
+.paxrow-pair label { flex: 1 1 150px; }
+
+.ordered { margin-top: 20px; }
+.ordered h3 { margin: 4px 0 12px; font-size: 24px; }
+
+@media (max-width: 560px) {
+  .booking-typed { flex: 1 1 100%; }
+  .bagopt { flex: 1 1 calc(50% - 8px); min-width: 0; }
+}
