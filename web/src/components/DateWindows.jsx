@@ -1,7 +1,7 @@
 import { money, shortDate } from '../lib/format'
 
 /** Real prices for nearby departure dates, so shifting is a visible choice. */
-export default function DateWindows({ windows, anchor, hotelPrice = 0, onPick }) {
+export default function DateWindows({ windows, anchor, hotelPrice = 0, selected, onPreview, onUse }) {
   if (!windows?.length) return null
 
   const sorted = [...windows].sort((a, b) => a.depart.localeCompare(b.depart))
@@ -30,8 +30,10 @@ export default function DateWindows({ windows, anchor, hotelPrice = 0, onPick })
             <li key={w.depart}>
               <button
                 type="button"
-                className={`window${isChosen ? ' is-chosen' : ''}${isCheapest ? ' is-cheapest' : ''}`}
-                onClick={() => onPick?.(w)}
+                className={`window${isChosen ? ' is-chosen' : ''}${isCheapest ? ' is-cheapest' : ''}`
+                  + (selected === w.depart ? ' is-selected' : '')}
+                aria-pressed={selected === w.depart}
+                onClick={() => onPreview?.(w)}
               >
                 <span className="window-date">
                   {w.return_date ? `${shortDate(w.depart)} – ${shortDate(w.return_date)}` : shortDate(w.depart)}
@@ -51,6 +53,17 @@ export default function DateWindows({ windows, anchor, hotelPrice = 0, onPick })
           )
         })}
       </ul>
+
+      {selected && selected !== anchor && (
+        <p className="windows-foot">
+          Totals above now show {shortDate(selected)}.
+          <button type="button" className="btn-secondary is-small"
+                  onClick={() => onUse?.(windows.find((w) => w.depart === selected))}>
+            Search these dates
+          </button>
+        </p>
+      )}
+      <p className="fine">Tap a date to see what the trip would cost. Nothing is searched until you say so.</p>
     </section>
   )
 }

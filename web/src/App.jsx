@@ -15,6 +15,9 @@ import BookingSheet from './components/BookingSheet'
 import Answer from './components/Answer'
 import AgentHUD from './components/AgentHUD'
 import Settings from './components/Settings'
+import ComboCard from './components/ComboCard'
+import TripDetail from './components/TripDetail'
+import NeedsBar from './components/NeedsBar'
 import TracePanel from './components/TracePanel'
 import { Pin, Crosshair } from './components/Icons'
 
@@ -42,6 +45,14 @@ export default function App() {
   const [booking, setBooking] = useState(null)
   const [showWork, setShowWork] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  // Once a trip has been asked for the page stops being a landing page: the
+  // hero collapses and the compose bar docks to the bottom as an overlay.
+  const [conversing, setConversing] = useState(false)
+  const [needs, setNeeds] = useState([])
+  const [openCombo, setOpenCombo] = useState(null)
+  // A date can be previewed without spending a search: the windows were all
+  // priced already, so swapping one just re-does the arithmetic on screen.
+  const [previewDate, setPreviewDate] = useState(null)
 
   const voice = useVoice({ enabled: voiceOut })
   const { locale, origin, airports } = useLocale()
@@ -55,12 +66,19 @@ export default function App() {
   }, [])
 
   const run = useCallback(async (text, { spoken = false } = {}) => {
-    const request = (text ?? brief).trim()
+    let request = (text ?? brief).trim()
     if (!request || busy) return
+    if (needs.length) {
+      request += `. Travelling needs: ${needs.join(', ')}.`
+    }
     setBusy(true)
     setError('')
     setStopping(false)
     setLiveSteps([])
+    setConversing(true)
+    setPreviewDate(null)
+    // The HUD used to render below the fold, so nothing appeared to happen.
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     const controller = new AbortController()
     abortRef.current = controller
     try {
@@ -72,6 +90,7 @@ export default function App() {
         // memory, so a restart or a sleeping instance loses it — this lets a
         // follow-up still refer to the results on screen.
         seen: onScreen(result),
+        needs,
       }
       // Streamed so the HUD can show each lookup as it happens, rather than
       // holding a spinner for the whole 15-odd seconds.
@@ -87,8 +106,7 @@ export default function App() {
         })
       setResult(data)
       if (spoken && voiceOut) voice.say(spokenSummary(data))
-      requestAnimationFrame(() =>
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+
     } catch (e) {
       if (e.name !== 'AbortError') setError(e.message)
     } finally {
@@ -112,6 +130,7 @@ export default function App() {
     setResult(null)
     setLiveSteps([])
     setBrief('')
+    setConversing(false)
   }, [sessionId])
 
   const onTranscript = useCallback((text) => {
@@ -120,11 +139,21 @@ export default function App() {
   }, [run])
 
   const trip = result?.trip
-  const hotels = result?.artifacts?.hotels || []
-  const alternatives = (trip?.alternatives || []).filter((h) => h.image_url || h.total_price != null)
+  const anchorDate = trip?.flight?.outbound?.depart?.slice(0, 10)
+
+  // Previewing a date re-prices the options on screen from windows we already
+  // paid for, so comparing dates costs nothing.
+  const combos = (result?.combos || []).map((c) => {
+    if (!previewDate || previewDate === anchorDate) return c
+    const w = (trip?.windows || []).find((x) => x.depart === previewDate)
+    if (!w || !c.includes_flight) return c
+    return { ...c, flight_price: w.price_total,
+             total: Math.round((w.price_total + c.hotel_price) * 100) / 100,
+             previewing: previewDate }
+  })
 
   return (
-    <div className="app">
+    <div className={`app${conversing ? ' is-conversing' : ''}`}>
       <header className="topbar">
         <a className="brand" href="/app">
           <span className="brand-mark"><Pin size={19} /></span>
@@ -160,8 +189,8 @@ export default function App() {
 
       <main className="main">
         {/* ── ask ─────────────────────────────────────────── */}
-        <section className={`compose${result ? ' is-answered' : ''}`}>
-          {!result && (
+        <section className={`compose${conversing ? ' is-answered' : ''}`}>
+          {!conversing && (
             <>
               <p className="mono eyebrow centred">Plan a trip</p>
               <h1 className="serif display">Where are we going?</h1>
@@ -178,7 +207,7 @@ export default function App() {
             </>
           )}
 
-          {voiceReady && !result && (
+          {voiceReady && !conversing && (
             <div className="mic-stage">
               <VoiceButton voice={voice} onTranscript={onTranscript} disabled={busy} big />
             </div>
@@ -192,11 +221,11 @@ export default function App() {
               onChange={(e) => setBrief(e.target.value)}
               onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run() }}
               placeholder="A few quiet nights in Bali, under $900, whenever is cheapest…"
-              rows={result ? 2 : 3}
+              rows={conversing ? 2 : 3}
               aria-label="What kind of trip?"
             />
             <div className="ask-actions">
-              {voiceReady && result && (
+              {voiceReady && conversing && (
                 <VoiceButton voice={voice} onTranscript={onTranscript} disabled={busy} />
               )}
               {busy ? (
@@ -213,7 +242,11 @@ export default function App() {
             </div>
           </div>
 
-          {!result && (
+          <NeedsBar selected={needs} disabled={busy}
+                    onToggle={(id) => setNeeds((prev) =>
+                      prev.includes(id) ? prev.filter((n) => n !== id) : [...prev, id])} />
+
+          {!conversing && (
             <ul className="examples">
               {EXAMPLES.map((ex) => (
                 <li key={ex}>
@@ -233,52 +266,45 @@ export default function App() {
         {/* ── answer ──────────────────────────────────────── */}
         {result && (
           <div className="results" ref={resultsRef}>
-            <TripTotal trip={trip} />
-
-            <div className="pair">
-              {trip?.flight && (
-                <FlightCard flight={trip.flight} localeTz={locale?.timezone}
-                            onBook={() => setBooking(trip.flight)} />
-              )}
-              {trip?.hotel && (
-                <HotelCard hotel={trip.hotel} onOpen={() => setOpenHotel(trip.hotel)} />
-              )}
-            </div>
+            {combos.length > 0 ? (
+              <>
+                <div className="combos">
+                  {combos.map((c) => (
+                    <ComboCard key={c.label} combo={c}
+                               onOpen={() => setOpenCombo(c)}
+                               onAsk={(q) => { setBrief(q); run(q, { spoken: true }) }} />
+                  ))}
+                </div>
+                <p className="combos-hint">
+                  Tap an option to open it, or just ask — “is there anything quieter?”,
+                  “what about the 26th?”
+                </p>
+              </>
+            ) : (
+              <section className="card answer-card">
+                <Answer text={result.answer} busy={false} />
+              </section>
+            )}
 
             {trip?.windows?.length > 0 && (
               <DateWindows
                 windows={trip.windows}
-                anchor={trip.flight?.outbound?.depart?.slice(0, 10)}
+                anchor={anchorDate}
                 hotelPrice={trip.hotel_price || 0}
-                onPick={(w) => run(
-                  `Use the ${w.depart}${w.return_date ? ` to ${w.return_date}` : ''} dates instead`,
-                  { spoken: false })}
+                selected={previewDate || anchorDate}
+                onPreview={(w) => setPreviewDate(w.depart)}
+                onUse={(w) => {
+                  const q = `Use ${w.depart}${w.return_date ? ` to ${w.return_date}` : ''} instead`
+                  setBrief(q); run(q, { spoken: false })
+                }}
               />
             )}
 
-            <section className="card answer-card">
-              <div className="card-head">
-                <h2>What we found</h2>
-                {voiceOut && (
-                  <button type="button" className="chip"
-                          onClick={() => (voice.speaking ? voice.stopSpeaking() : voice.say(spokenSummary(result)))}>
-                    {voice.speaking ? 'Stop' : 'Read aloud'}
-                  </button>
-                )}
-              </div>
-              <Answer text={result.answer} busy={false} />
-            </section>
-
-            {alternatives.length > 0 && (
-              <section className="alts">
-                <h2 className="mono eyebrow">Other places we looked at</h2>
-                <div className="alt-grid">
-                  {alternatives.map((h) => (
-                    <HotelCard key={h.hotel_id || h.name} hotel={h} compact
-                               onOpen={() => setOpenHotel(h)} />
-                  ))}
-                </div>
-              </section>
+            {combos.length > 0 && (
+              <details className="work">
+                <summary>What we found, in full</summary>
+                <div className="work-body"><Answer text={result.answer} busy={false} /></div>
+              </details>
             )}
 
             <details className="work" open={showWork}
@@ -314,6 +340,11 @@ export default function App() {
       {openHotel && (
         <HotelDetail hotel={openHotel} onClose={() => setOpenHotel(null)}
                      onAsk={(t) => { setOpenHotel(null); setBrief(t); run(t, { spoken: true }) }} />
+      )}
+      {openCombo && (
+        <TripDetail combo={openCombo} onClose={() => setOpenCombo(null)}
+                    onAsk={(q) => { setBrief(q); run(q, { spoken: true }) }}
+                    onBookFlight={(f) => { setOpenCombo(null); setBooking(f) }} />
       )}
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       {booking && (

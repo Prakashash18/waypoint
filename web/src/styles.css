@@ -546,3 +546,136 @@ img { max-width: 100%; }
 .quota-bar span { display: block; height: 100%; background: var(--good);
   transition: width .4s ease; }
 .quota-bar span.is-high { background: var(--warn); }
+
+/* ── conversing layout ───────────────────────────────────────── */
+/* Once a trip has been asked for, the compose box stops being part of the page
+   and docks to the bottom as an overlay, so results start at the top of the
+   viewport instead of below the fold. */
+
+.app.is-conversing .main { padding-bottom: 190px; }
+
+@media (min-width: 720px) {
+  .app.is-conversing .compose {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    max-width: none; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: saturate(1.5) blur(14px);
+    border-top: 1px solid var(--line);
+  }
+  .app.is-conversing .compose > .ask,
+  .app.is-conversing .compose > .needs { max-width: 1180px; margin-inline: auto; }
+}
+@media (max-width: 719px) {
+  .app.is-conversing .compose {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    backdrop-filter: saturate(1.5) blur(14px);
+    border-top: 1px solid var(--line);
+  }
+  .app.is-conversing .compose .ask { box-shadow: none; }
+}
+.app.is-conversing .dock { display: none; }   /* the compose bar is the dock now */
+.app.is-conversing .results { margin-top: 8px; }
+
+/* ── needs ───────────────────────────────────────────────────── */
+
+.needs { display: flex; align-items: center; gap: 10px; width: 100%;
+  max-width: 640px; margin-top: 10px; overflow: hidden; }
+.app.is-conversing .needs { max-width: none; }
+.needs-label { font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--faint); flex: none; }
+.needs ul { display: flex; gap: 6px; list-style: none; padding: 2px 0; margin: 0;
+  overflow-x: auto; scrollbar-width: none; }
+.needs ul::-webkit-scrollbar { display: none; }
+.need {
+  white-space: nowrap; font: 500 12.5px/1 var(--sans); color: var(--dim);
+  background: var(--surface); border: 1px solid var(--line);
+  padding: 8px 12px; border-radius: 999px; cursor: pointer; min-height: 34px;
+}
+.need:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
+.need.is-on { background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); font-weight: 600; }
+.need:disabled { opacity: .5; cursor: default; }
+
+/* ── combos ──────────────────────────────────────────────────── */
+
+.combos { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px)  { .combos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1040px) { .combos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.combo {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 11px;
+}
+.combo-head { display: flex; flex-direction: column; gap: 7px; }
+.combo-label {
+  align-self: flex-start; font: 600 10.5px/1 var(--mono); letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent);
+  background: var(--accent-soft); padding: 5px 9px; border-radius: 999px;
+}
+.combo-total { margin: 0; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.combo-total .serif { font-size: 30px; line-height: 1; }
+.combo-unit { font-size: 12.5px; color: var(--dim); }
+
+.combo-stay {
+  display: flex; align-items: center; gap: 11px; text-align: left; width: 100%;
+  padding: 0; background: transparent; border: 0; cursor: pointer;
+}
+.combo-stay img, .combo-noimg {
+  width: 58px; height: 58px; border-radius: 10px; object-fit: cover; flex: none;
+  background: var(--surface-2);
+}
+.combo-stay-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.combo-stay-text strong { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.combo-stay-text span { font-size: 12.5px; color: var(--dim); }
+.combo-stay:hover strong { color: var(--accent); }
+
+.combo-flight { display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 12.5px; color: var(--dim); }
+.combo-flight svg { color: var(--faint); flex: none; }
+.combo-flight.is-missing { color: var(--warn); }
+.combo-split { margin: 0; font-size: 12.5px; color: var(--faint); }
+.combo-why { font-style: italic; }
+.combo-foot { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; flex-wrap: wrap; }
+.btn-secondary.is-small { min-height: 36px; padding: 9px 13px; font-size: 13px; flex-grow: 1; }
+.combos-hint { margin: 2px 0 0; font-size: 13px; color: var(--faint); text-align: center; }
+
+/* ── drill-down ──────────────────────────────────────────────── */
+
+.sheet.is-wide { max-width: 720px; }
+.breakdown { list-style: none; padding: 0; margin: 0; }
+.breakdown li { display: flex; justify-content: space-between; gap: 14px;
+  padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.breakdown li span { color: var(--dim); }
+.breakdown li.is-total { border-bottom: 0; border-top: 1px solid var(--line);
+  padding-top: 11px; font-size: 15px; }
+.breakdown li.is-total span { color: var(--ink); font-weight: 600; }
+.breakdown li.is-total strong { font-size: 17px; }
+.detail-block { display: flex; flex-direction: column; gap: 8px; }
+.detail-block .eyebrow { display: flex; align-items: center; gap: 7px; margin: 0; }
+.photo-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.photo-strip img { width: 100%; height: 74px; object-fit: cover; border-radius: 8px; }
+
+/* ── date preview ────────────────────────────────────────────── */
+
+.window.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.windows-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 12px 0 0; font-size: 13px; color: var(--dim); }
+.windows-foot .btn-secondary { flex-grow: 0; }
+
+/* The docked compose bar should be a strip, not a panel: one line of input,
+   the needs beside it, and nothing else stealing height from the results. */
+.app.is-conversing .ask { padding: 8px 10px; border-radius: var(--radius-sm); }
+.app.is-conversing .ask textarea { min-height: 34px; padding: 4px 6px; }
+.app.is-conversing .ask-actions { margin-top: 4px; padding-top: 8px; }
+.app.is-conversing .btn-primary,
+.app.is-conversing .ask-actions .btn-secondary { min-height: 40px; padding: 10px 18px; }
+.app.is-conversing .mic { min-height: 40px; }
+.app.is-conversing .mic.is-compact { width: 40px; height: 40px; }
+.app.is-conversing .needs { margin-top: 8px; }
+.app.is-conversing .need { min-height: 30px; padding: 6px 11px; font-size: 12px; }
+@media (min-width: 720px) { .app.is-conversing .main { padding-bottom: 168px; } }
+@media (max-width: 719px) { .app.is-conversing .main { padding-bottom: 176px; } }

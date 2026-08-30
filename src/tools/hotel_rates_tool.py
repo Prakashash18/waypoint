@@ -56,6 +56,39 @@ DAILY_LIMIT = int(os.getenv('WAYPOINT_RAPIDAPI_DAILY_LIMIT', 40))
 
 ATTRIBUTION = 'Rates, review scores and photos from Booking.com via RapidAPI'
 
+# Booking.com's own filter ids, verified against getFilter for this provider.
+# Mapping them from plain needs keeps the agent (and the UI) out of the
+# business of remembering numeric facility codes.
+TRAVELLER_NEEDS = {
+    'family':        (['facility::28'], 'family rooms'),
+    'kids':          (['facility::28'], 'family rooms'),
+    'wheelchair':    (['facility::185', 'accessible_room_facilities::134'],
+                      'wheelchair-accessible property and unit'),
+    'step_free':     (['accessible_room_facilities::131'], 'ground-floor unit'),
+    'elderly':       (['accessible_room_facilities::132'], 'lift to upper floors'),
+    'pool':          (['facility::433'], 'swimming pool'),
+    'breakfast':     (['mealplan::breakfast_included'], 'breakfast included'),
+    'well_reviewed': (['reviewscorebuckets::80'], 'guest score 8 or better'),
+    'top_reviewed':  (['reviewscorebuckets::90'], 'guest score 9 or better'),
+}
+
+
+def filters_for(needs) -> tuple:
+    """Turn plain needs into provider filter ids. Returns (ids, descriptions)."""
+    ids, described, unknown = [], [], []
+    for need in (needs or []):
+        key = str(need).strip().lower().replace(' ', '_').replace('-', '_')
+        match = TRAVELLER_NEEDS.get(key)
+        if not match:
+            unknown.append(need)
+            continue
+        for fid in match[0]:
+            if fid not in ids:
+                ids.append(fid)
+        described.append(match[1])
+    return ids, described, unknown
+
+
 SETUP_HINT = (
     'Set RAPIDAPI_KEY in .env and subscribe that key to "booking-com15" on '
     'rapidapi.com (free BASIC plan) to enable live rates.'
@@ -105,6 +138,9 @@ class HotelRatesTool(ToolBase):
                     'currency': 'Currency code (default USD)',
                     'min_review_score': 'Only hotels scoring at least this /10 (optional)',
                     'max_price': 'Only hotels at or below this total price (optional)',
+                    'needs': ('Comma-separated traveller needs the provider can filter on: '
+                              'family, kids, wheelchair, step_free, elderly, pool, '
+                              'breakfast, well_reviewed, top_reviewed'),
                 },
                 returns='list[HotelOffer]',
                 required=['destination', 'check_in', 'check_out'],
@@ -314,6 +350,11 @@ class HotelRatesTool(ToolBase):
             return ToolResult(status=ToolStatus.ERROR,
                               message='check_out must be after check_in', error='Invalid dates')
 
+        raw_needs = params.get('needs') or []
+        if isinstance(raw_needs, str):
+            raw_needs = [n for n in raw_needs.replace(',', ' ').split() if n]
+        filter_ids, described, unknown = filters_for(raw_needs)
+
         dest, dest_prov = self._resolve_destination(destination)
         if dest is None:
             return self._degraded(dest_prov, destination,
@@ -331,6 +372,7 @@ class HotelRatesTool(ToolBase):
             'units': 'metric',
             'currency_code': params.get('currency', 'USD') or 'USD',
             'languagecode': 'en-us',
+            'categories_filter': ','.join(filter_ids) or None,
         })
         if payload is None:
             return self._degraded(prov, destination,
@@ -368,10 +410,16 @@ class HotelRatesTool(ToolBase):
                 'check_in': check_in, 'check_out': check_out, 'nights': nights,
                 'hotels': hotels, 'count': len(hotels),
                 'has_prices': True,
+                'filtered_for': described,
+                # Say plainly what could not be filtered rather than implying
+                # the results honour a need they were never checked against.
+                'unsupported_needs': unknown,
                 'provenance': prov.to_dict(),
             },
             message=(f'{len(hotels)} bookable hotels in {dest.get("label", destination)} '
-                     f'({nights} nights, {prov.status.value})'),
+                     f'({nights} nights, {prov.status.value})'
+                     + (f' filtered for {", ".join(described)}' if described else '')
+                     + (f'; cannot filter on {", ".join(unknown)}' if unknown else '')),
         )
 
     def _degraded(self, prov: Provenance, destination: str, headline: str) -> ToolResult:

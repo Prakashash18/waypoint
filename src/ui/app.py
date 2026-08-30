@@ -627,6 +627,7 @@ def plan_trip():
             'success': True,
             'packages': _packages_from(result),
             'trip': _trip_from(result),
+            'combos': _combos_from(result),
             'response': result['answer'],
             **result,
         })
@@ -651,7 +652,8 @@ def agent_plan():
         session = sessions.get_or_create(data.get('session_id'), data.get('user_id'))
         result = _agent().plan(brief, context=data.get('context'), session=session)
         return jsonify({'success': True, 'packages': _packages_from(result),
-                        'trip': _trip_from(result), **result})
+                        'trip': _trip_from(result),
+                       'combos': _combos_from(result), **result})
     except Exception as e:
         app.logger.exception('agent plan failed')
         return jsonify({'success': False, 'error': str(e)}), 400
@@ -683,7 +685,8 @@ def agent_stream():
                 brief, context=context, session=session,
                 on_step=lambda step: events.put(('step', step.to_dict())))
             events.put(('done', {'packages': _packages_from(result),
-                                 'trip': _trip_from(result), **result}))
+                                 'trip': _trip_from(result),
+                       'combos': _combos_from(result), **result}))
         except Exception as exc:
             app.logger.exception('agent stream failed')
             events.put(('error', {'error': str(exc)}))
@@ -967,6 +970,79 @@ def _trip_from(result: dict) -> dict:
         'locale': locale or None,
         'alternatives': [h for h in hotels if h is not hotel][:8],
     }
+
+
+def _combos_from(result: dict) -> list:
+    """A few air + hotel combinations, each with a total and a reason.
+
+    The results page used to show one trip plus a wall of supporting detail.
+    A traveller is choosing between whole trips, so the page leads with two or
+    three costed combinations and everything else waits to be asked for.
+
+    Only pairings we can actually price appear here; a hotel with no rate is
+    not quietly turned into a total.
+    """
+    artifacts = result.get('artifacts') or {}
+    flights = artifacts.get('flights') or []
+    hotels = [h for h in (artifacts.get('hotels') or []) if h.get('total_price') is not None]
+    if not hotels:
+        return []
+
+    flight = min(flights, key=lambda f: f.get('price_total') or 1e9) if flights else None
+
+    # A flexible-date search returns whole offers but never populates
+    # artifacts['flights'], so asking for the cheapest window produced combos
+    # labelled "stay only" even though a flight had been priced.
+    if flight is None:
+        windows = artifacts.get('windows') or []
+        if windows:
+            flight = min(windows, key=lambda w: w.get('price_total') or 1e9).get('offer')
+
+    flight_price = (flight or {}).get('price_total')
+    flight_currency = (flight or {}).get('currency')
+
+    # Never add across currencies — we hold no exchange rates.
+    if flight and flight_currency and hotels[0].get('currency') \
+            and flight_currency != hotels[0]['currency']:
+        flight, flight_price = None, None
+
+    cheapest = min(hotels, key=lambda h: h['total_price'])
+    rated = [h for h in hotels if (h.get('review_score') or 0) > 0]
+    best_rated = max(rated, key=lambda h: h['review_score']) if rated else None
+
+    # Best value: the highest review score per unit of money, so it is a real
+    # trade-off rather than a third way of saying "cheapest".
+    def value(h):
+        score = h.get('review_score') or 0
+        return score / h['total_price'] if h['total_price'] else 0
+    best_value = max(rated, key=value) if rated else None
+
+    picks = []
+    for hotel, label, why in (
+        (best_value, 'Best value', 'the best reviews for the money'),
+        (cheapest, 'Cheapest', 'the lowest total we found'),
+        (best_rated, 'Best reviewed', 'the highest-rated stay available'),
+    ):
+        if hotel is None or any(p['hotel']['hotel_id'] == hotel.get('hotel_id') for p in picks):
+            continue
+        total = (round(flight_price + hotel['total_price'], 2)
+                 if flight_price is not None else hotel['total_price'])
+        picks.append({
+            'label': label,
+            'why': why,
+            'hotel': hotel,
+            'flight': flight,
+            'hotel_price': hotel['total_price'],
+            'flight_price': flight_price,
+            'total': total,
+            'includes_flight': flight_price is not None,
+            'currency': hotel.get('currency') or flight_currency or 'USD',
+            'nights': hotel.get('nights'),
+            'passengers': (flight or {}).get('passengers'),
+        })
+
+    picks.sort(key=lambda p: p['total'])
+    return picks[:3]
 
 
 def _packages_from(result: dict) -> list:
