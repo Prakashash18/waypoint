@@ -825,6 +825,15 @@ def list_sources():
             {'id': 'aviationstack', 'label': 'AviationStack',
              'provides': 'live flight delays',
              'configured': bool(os.getenv('AVIATIONSTACK_API_KEY'))},
+            {'id': 'wikipedia', 'label': 'Wikipedia',
+             'provides': 'working out what place a vague or misspelt query means',
+             'configured': True},
+            {'id': 'websearch', 'label': 'Web search',
+             'provides': 'open questions the travel sources do not cover',
+             'configured': bool(os.getenv('BRAVE_SEARCH_API_KEY')
+                                or os.getenv('TAVILY_API_KEY')),
+             'note': '' if (os.getenv('BRAVE_SEARCH_API_KEY') or os.getenv('TAVILY_API_KEY'))
+                     else 'optional — set BRAVE_SEARCH_API_KEY (2,000 free a month)'},
             {'id': 'ip-api', 'label': 'ip-api.com',
              'provides': 'the traveller\'s location, currency and timezone',
              'configured': True},

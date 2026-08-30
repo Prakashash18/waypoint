@@ -238,7 +238,8 @@ class PlacesTool(ToolBase):
         try:
             resp = self._session.get(
                 NOMINATIM_URL,
-                params={'q': query, 'format': 'json', 'limit': 1, 'addressdetails': 1},
+                params={'q': query, 'format': 'json', 'limit': 1, 'addressdetails': 1,
+                'accept-language': 'en'},
                 timeout=self._timeout,
             )
         except requests.RequestException as exc:
@@ -257,6 +258,12 @@ class PlacesTool(ToolBase):
 
         hits = resp.json()
         if not hits:
+            # The geocoder is exact, so a typo or a description reads as "no
+            # such place". Interpret it before telling anyone their
+            # destination does not exist.
+            resolved = self._interpret_place(query)
+            if resolved is not None:
+                return resolved
             prov = Provenance('nominatim', SourceStatus.UNAVAILABLE, url=NOMINATIM_URL,
                               detail=f'no match for {query!r}')
             return ToolResult(status=ToolStatus.NO_RESULTS,
@@ -279,6 +286,34 @@ class PlacesTool(ToolBase):
                           license='ODbL', attribution=OSM_ATTRIBUTION)
         return ToolResult(status=ToolStatus.SUCCESS, data=stamp(place, prov),
                           message=f"{place['display_name']} @ {place['lat']:.4f},{place['lon']:.4f}")
+
+    def _interpret_place(self, query: str):
+        """Second attempt at a query the geocoder rejected. None if hopeless."""
+        try:
+            from .websearch_tool import WebSearchTool
+            result = WebSearchTool().resolve_place({'query': query})
+        except Exception as exc:
+            logger.debug('Place interpretation failed: %s', exc)
+            return None
+        if not result.is_success():
+            return None
+
+        data = result.data
+        place = {
+            'query': query,
+            'display_name': data.get('display_name', query),
+            'lat': data['lat'], 'lon': data['lon'],
+            'osm_type': '', 'osm_id': '', 'place_class': '',
+            'country': data.get('country', ''),
+            'interpreted_as': data.get('interpretation'),
+        }
+        self._cache.set(f'geo:{query.lower()}', place)
+        prov = Provenance('wikipedia', SourceStatus.LIVE,
+                          license='CC BY-SA 4.0',
+                          attribution='Interpreted via Wikipedia, located via OpenStreetMap',
+                          detail=f'read {query!r} as {data.get("interpretation")!r}')
+        return ToolResult(status=ToolStatus.SUCCESS, data=stamp(place, prov),
+                          message=result.message)
 
     # ── hotels ───────────────────────────────────────────────────
 

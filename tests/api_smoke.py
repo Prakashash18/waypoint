@@ -285,6 +285,27 @@ def test_stack():
         record('locale detection', bool(d.get('currency')) and bool(d.get('lat')),
                f"{d.get('city')}, {d.get('country')} · {d.get('currency')} · {d.get('timezone')}", ms)
 
+    # The geocoder is exact; a typo used to read as "no such place".
+    from src.tools.websearch_tool import WebSearchTool
+    resolver = WebSearchTool()
+    for query, expect in (('Seminyk Bali', 'Seminyak'), ('Ubood Bali', 'Ubud')):
+        (res, ms, err) = timed(lambda q=query: resolver.resolve_place({'query': q}))
+        if err:
+            record(f'resolve {query!r}', False, type(err).__name__, ms, str(err)[:140]); continue
+        got = (res.data or {}).get('interpretation') or ''
+        record(f'resolve {query!r}', res.is_success() and expect in got,
+               f'read as {got!r}', ms, res.message[:120])
+
+    (res, ms, err) = timed(lambda: resolver.resolve_place({'query': 'Zzqqxnowhere'}))
+    record('nonsense stays unresolved', (not err) and not res.is_success(),
+           res.status.value if not err else 'exception', ms,
+           res.message[:110] if not err else '')
+
+    # And the geocoder itself should now recover from a typo.
+    (res, ms, err) = timed(lambda: places.geocode_place({'query': 'Ubood Bali'}))
+    record('geocoder recovers from a typo', (not err) and res.is_success(),
+           (res.data or {}).get('display_name', '')[:48] if not err else '', ms)
+
     imagery = ImageryTool()
     (res, ms, err) = timed(lambda: imagery.capture_hotel_view(
         {'name': 'Maya Ubud', 'website': 'http://www.mayaubud.com',
