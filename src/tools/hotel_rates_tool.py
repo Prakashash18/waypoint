@@ -53,11 +53,18 @@ ENDPOINT_TTL = {
 # plan it is 50 requests a MONTH — not a day. A locally invented daily cap was
 # meaningless against that, so the provider's own counter is the authority and
 # this is only a secondary guard for a single runaway session.
-DAILY_LIMIT = int(os.getenv('WAYPOINT_RAPIDAPI_DAILY_LIMIT', 40))
+# Generous by design: this is a guard against one runaway session, not a
+# throttle. The provider's own allowance is the real limit.
+DAILY_LIMIT = int(os.getenv('WAYPOINT_RAPIDAPI_DAILY_LIMIT', 400))
 
 # Header names RapidAPI returns, lowercased.
 QUOTA_HEADERS = ('x-ratelimit-requests-limit', 'x-ratelimit-requests-remaining',
                  'x-ratelimit-requests-reset')
+
+# How long to trust a "nothing left" reading before probing again. A plan can
+# be upgraded at any moment, and a stale zero would otherwise lock the app out
+# of a provider that is perfectly willing to answer.
+EXHAUSTED_RECHECK = int(os.getenv('WAYPOINT_QUOTA_RECHECK', 600))
 
 ATTRIBUTION = 'Rates, review scores and photos from Booking.com via RapidAPI'
 
@@ -252,6 +259,11 @@ class HotelRatesTool(ToolBase):
         quota = self.provider_quota()
         if quota and quota.get('remaining') is not None:
             provider_left = max(0, int(quota['remaining']))
+            # An old zero is a guess, not a fact: allow one probe so an
+            # upgraded plan is noticed instead of being locked out until reset.
+            if provider_left == 0 and \
+                    time.time() - quota.get('seen_at', 0) > EXHAUSTED_RECHECK:
+                provider_left = 1
         else:
             provider_left = None
 
@@ -288,6 +300,14 @@ class HotelRatesTool(ToolBase):
             'history': self._ledger(),
             'rate_ttl_hours': round(CACHE_TTL / 3600, 1),
         }
+
+    def recheck_quota(self) -> Dict[str, Any]:
+        """Forget what we think the allowance is, so the next call re-reads it."""
+        try:
+            os.remove(self._quota_path)
+        except OSError:
+            pass
+        return {'rechecked': True}
 
     def clear_cache(self) -> Dict[str, Any]:
         """Explicit reset from settings — the next search fetches fresh."""

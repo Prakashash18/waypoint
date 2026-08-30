@@ -778,6 +778,13 @@ def cache_settings():
     if rates is None or not hasattr(rates, 'cache_stats'):
         return jsonify({'success': False, 'error': 'no rate provider'}), 404
 
+    # Upgrading a plan changes the allowance behind our back, so offer a way
+    # to forget what we think it is.
+    if request.args.get('recheck') and hasattr(rates, 'recheck_quota'):
+        rates.recheck_quota()
+        return jsonify({'success': True, **rates.cache_stats(),
+                        'note': 'Allowance forgotten; the next search re-reads it.'})
+
     if request.method == 'DELETE':
         return jsonify({'success': True, **rates.clear_cache(),
                         'note': 'Cleared. The next search fetches fresh prices '

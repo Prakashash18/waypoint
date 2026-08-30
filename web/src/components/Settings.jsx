@@ -85,6 +85,18 @@ export default function Settings({ onClose }) {
               </ul>
 
               <div className="sheet-actions">
+                <button type="button" className="btn-secondary" disabled={busy}
+                        onClick={async () => {
+                          setBusy(true)
+                          try {
+                            await fetch('/api/settings/cache?recheck=1')
+                            setNote('Allowance forgotten — the next search re-reads it.')
+                            await load()
+                          } finally { setBusy(false) }
+                        }}
+                        title="Use this after changing your plan">
+                  Re-check allowance
+                </button>
                 <button type="button" className="btn-secondary" onClick={reset}
                         disabled={busy || exhausted}
                         title={exhausted
