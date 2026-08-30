@@ -96,9 +96,15 @@ HOW TO WORK
   which prices several windows and returns them cheapest first. Do not invent
   a date and search once — the whole question was which date to pick.
 - For prices and bookable stays use `hotel_rates__search_hotels`.
-- `places__find_hotels` gives real OpenStreetMap hotels with coordinates and
-  official websites but no prices. Use it to go deeper on a specific area,
-  to find places rates coverage missed, or when rates are unavailable.
+- ANY request for somewhere to stay — "hotels", "accommodation", "places to
+  stay", "somewhere nearby to stay" — goes to `hotel_rates__search_hotels`.
+  That is the one that returns a price, a review score, a photograph and a way
+  to book. Pass the dates already in play.
+- `places__find_hotels` gives OpenStreetMap hotels with coordinates and
+  official websites but NO price, NO score and NO photograph, so a traveller
+  cannot act on them. Reach for it only when rates are genuinely unavailable,
+  or when the question is about the buildings rather than about staying — and
+  say plainly that no prices came with them.
 - `places__describe_area` gives factual Wikipedia context about a neighbourhood.
 - `places__find_attractions` lists real places near a hotel with walking
   directions from it. Use it for "what is nearby" rather than answering from
@@ -254,6 +260,9 @@ class TripAgent:
             'images': list(prior.get('images') or []),
             'areas': list(prior.get('areas') or []),
             'windows': list(prior.get('windows') or []),
+            'flights_seq': prior.get('flights_seq', 0),
+            'windows_seq': prior.get('windows_seq', 0),
+            '_seq': prior.get('_seq', 0),
             'airports': list(prior.get('airports') or []),
             'attractions': list(prior.get('attractions') or []),
             'locale': prior.get('locale'),
@@ -566,13 +575,19 @@ class TripAgent:
         if capability in ('search_hotels', 'find_hotels'):
             self._merge_hotels(artifacts['hotels'], data.get('hotels') or [])
         elif capability == 'search_flights':
-            artifacts['flights'] = data.get('offers') or artifacts['flights']
+            if data.get('offers'):
+                artifacts['flights'] = data['offers']
+                artifacts['flights_seq'] = artifacts.get('_seq', 0) + 1
+                artifacts['_seq'] = artifacts['flights_seq']
         elif capability == 'capture_hotel_view' and data.get('image_url'):
             artifacts['images'].append(data)
         elif capability == 'find_photos':
             artifacts['images'].extend(data.get('photos') or [])
         elif capability == 'find_date_deals':
-            artifacts['windows'] = data.get('windows') or artifacts['windows']
+            if data.get('windows'):
+                artifacts['windows'] = data['windows']
+                artifacts['windows_seq'] = artifacts.get('_seq', 0) + 1
+                artifacts['_seq'] = artifacts['windows_seq']
         elif capability == 'find_attractions':
             artifacts['attractions'] = data.get('attractions') or artifacts.get('attractions') or []
         elif capability == 'nearest_airports':

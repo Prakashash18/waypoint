@@ -1107,18 +1107,26 @@ def _snapshot(session) -> dict:
 
 
 def _best_flight(artifacts: dict) -> dict:
-    """The cheapest flight we hold, wherever it came from.
+    """The cheapest flight from whichever search ran most recently.
 
-    A flexible-date search stores offers under `windows`, not `flights`, so
-    looking only at `flights` made every price comparison come back empty.
+    A flexible-date search stores offers under `windows`, a plain one under
+    `flights`, and both carry forward between turns. Preferring `flights`
+    outright put a Bali flight beside a Bangkok answer, because asking about a
+    new city with flexible dates fills `windows` and leaves the old `flights`
+    untouched. Each source is stamped when it is written; the newer wins.
     """
     flights = artifacts.get('flights') or []
-    if flights:
-        return min(flights, key=lambda f: f.get('price_total') or 1e9) or {}
     windows = artifacts.get('windows') or []
-    if windows:
-        return (min(windows, key=lambda w: w.get('price_total') or 1e9) or {}).get('offer') or {}
-    return {}
+
+    from_flights = (min(flights, key=lambda f: f.get('price_total') or 1e9)
+                    if flights else None)
+    from_windows = ((min(windows, key=lambda w: w.get('price_total') or 1e9) or {}).get('offer')
+                    if windows else None)
+
+    if from_flights and from_windows:
+        newer = (artifacts.get('flights_seq', 0) >= artifacts.get('windows_seq', 0))
+        return (from_flights if newer else from_windows) or {}
+    return from_flights or from_windows or {}
 
 
 def _cards_from(result: dict, before: dict) -> list:
@@ -1310,15 +1318,8 @@ def _combos_from(result: dict) -> list:
     if not hotels:
         return []
 
-    flight = min(flights, key=lambda f: f.get('price_total') or 1e9) if flights else None
-
-    # A flexible-date search returns whole offers but never populates
-    # artifacts['flights'], so asking for the cheapest window produced combos
-    # labelled "stay only" even though a flight had been priced.
-    if flight is None:
-        windows = artifacts.get('windows') or []
-        if windows:
-            flight = min(windows, key=lambda w: w.get('price_total') or 1e9).get('offer')
+    # Same rule as the trip card: whichever flight search ran most recently.
+    flight = _best_flight(artifacts) or None
 
     flight_price = (flight or {}).get('price_total')
     flight_currency = (flight or {}).get('currency')
