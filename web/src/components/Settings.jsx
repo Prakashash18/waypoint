@@ -30,9 +30,14 @@ export default function Settings({ onClose }) {
     }
   }
 
-  const used = cache ? cache.calls_today : 0
-  const limit = cache ? cache.daily_limit : 0
+  // The provider's own allowance is the real one — on the BASIC plan it is 50
+  // requests a month, which a local per-day cap tells you nothing about.
+  const monthly = cache?.provider_limit != null
+  const limit = monthly ? cache.provider_limit : cache?.daily_limit || 0
+  const left = monthly ? cache.provider_remaining : cache?.calls_left_today || 0
+  const used = Math.max(0, limit - left)
   const pct = limit ? Math.min(100, (used / limit) * 100) : 0
+  const exhausted = Boolean(cache?.exhausted)
 
   return (
     <div className="sheet-backdrop" onClick={onClose} role="presentation">
@@ -55,16 +60,21 @@ export default function Settings({ onClose }) {
             <>
               <div className="quota">
                 <div className="quota-head">
-                  <span>Live lookups today</span>
+                  <span>{monthly ? 'Price lookups this month' : 'Live lookups today'}</span>
                   <strong>{used} of {limit}</strong>
                 </div>
                 <div className="quota-bar">
-                  <span style={{ width: `${pct}%` }} className={pct > 80 ? 'is-high' : ''} />
+                  <span style={{ width: `${pct}%` }}
+                        className={exhausted ? 'is-out' : pct > 80 ? 'is-high' : ''} />
                 </div>
-                <p className="fine">
-                  {cache.calls_left_today > 0
-                    ? `${cache.calls_left_today} left. Past the limit you still get prices — the saved ones, marked stale.`
-                    : 'Used up. You will still get prices, but they will be the saved ones, marked stale.'}
+                <p className={exhausted ? 'warn-line' : 'fine'}>
+                  {exhausted
+                    ? `Used up${cache.provider_resets_in_days
+                        ? `, resets in ${Math.round(cache.provider_resets_in_days)} days`
+                        : ''}. Searches you have run before still work from the saved
+                       prices; a new destination or new dates will say no price is
+                       available rather than guessing one.`
+                    : `${left} left. Past the limit you still get saved prices, marked stale.`}
                 </p>
               </div>
 
@@ -75,14 +85,21 @@ export default function Settings({ onClose }) {
               </ul>
 
               <div className="sheet-actions">
-                <button type="button" className="btn-secondary" onClick={reset} disabled={busy}>
+                <button type="button" className="btn-secondary" onClick={reset}
+                        disabled={busy || exhausted}
+                        title={exhausted
+                          ? 'Clearing now would leave you with no prices at all'
+                          : 'The next search fetches fresh prices'}>
                   {busy ? 'Clearing…' : 'Clear saved prices'}
                 </button>
               </div>
               {note && <p className="fine">{note}</p>}
               <p className="fine">
-                Clearing means the next search fetches fresh prices and spends from
-                today’s allowance.
+                {exhausted
+                  ? 'Clearing is disabled while the allowance is used up — it would '
+                    + 'throw away the only prices you have.'
+                  : 'Clearing means the next search fetches fresh prices and spends '
+                    + 'from the allowance.'}
               </p>
             </>
           )}

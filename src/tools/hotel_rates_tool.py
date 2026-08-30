@@ -49,10 +49,15 @@ ENDPOINT_TTL = {
     '/hotels/getHotelPhotos': int(os.getenv('WAYPOINT_PHOTO_CACHE_TTL', 7 * 86400)),
 }
 
-# A hard ceiling on live calls per UTC day. Past it we serve whatever is
-# cached, however old, and say so — better than silently spending a quota the
-# traveller cannot see. 0 disables live calls entirely (cache only).
+# RapidAPI reports the real allowance on every response, and for the BASIC
+# plan it is 50 requests a MONTH — not a day. A locally invented daily cap was
+# meaningless against that, so the provider's own counter is the authority and
+# this is only a secondary guard for a single runaway session.
 DAILY_LIMIT = int(os.getenv('WAYPOINT_RAPIDAPI_DAILY_LIMIT', 40))
+
+# Header names RapidAPI returns, lowercased.
+QUOTA_HEADERS = ('x-ratelimit-requests-limit', 'x-ratelimit-requests-remaining',
+                 'x-ratelimit-requests-reset')
 
 ATTRIBUTION = 'Rates, review scores and photos from Booking.com via RapidAPI'
 
@@ -205,10 +210,55 @@ class HotelRatesTool(ToolBase):
             except OSError as exc:
                 logger.warning('Could not write the call ledger: %s', exc)
 
+    # ── the provider's own allowance ─────────────────────────────
+
+    @property
+    def _quota_path(self) -> str:
+        return os.path.join(self._cache_dir, '_quota.json')
+
+    def provider_quota(self) -> Dict[str, Any]:
+        """Last reported allowance: limit, remaining and when it resets."""
+        try:
+            with open(self._quota_path) as fh:
+                quota = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return {}
+        # Once the reset time passes the allowance is fresh again.
+        if quota.get('reset_at') and time.time() > quota['reset_at']:
+            return {}
+        return quota
+
+    def _record_quota(self, headers) -> None:
+        lower = {k.lower(): v for k, v in headers.items()}
+        if 'x-ratelimit-requests-remaining' not in lower:
+            return
+        try:
+            quota = {
+                'limit': int(lower.get('x-ratelimit-requests-limit', 0)),
+                'remaining': int(lower['x-ratelimit-requests-remaining']),
+                'reset_at': time.time() + int(lower.get('x-ratelimit-requests-reset', 0)),
+                'seen_at': time.time(),
+            }
+        except (TypeError, ValueError):
+            return
+        try:
+            with open(self._quota_path, 'w') as fh:
+                json.dump(quota, fh)
+        except OSError as exc:
+            logger.warning('Could not write the quota record: %s', exc)
+
     def budget_left(self) -> int:
-        if DAILY_LIMIT <= 0:
-            return 0
-        return max(0, DAILY_LIMIT - self.spend_today())
+        """Live calls we can still make, by the stricter of the two limits."""
+        quota = self.provider_quota()
+        if quota and quota.get('remaining') is not None:
+            provider_left = max(0, int(quota['remaining']))
+        else:
+            provider_left = None
+
+        local_left = max(0, DAILY_LIMIT - self.spend_today()) if DAILY_LIMIT > 0 else 0
+        if provider_left is None:
+            return local_left
+        return min(provider_left, local_left)
 
     def cache_stats(self) -> Dict[str, Any]:
         """What the settings panel shows about the metered provider."""
@@ -221,8 +271,14 @@ class HotelRatesTool(ToolBase):
                 entries.append(time.time() - os.path.getmtime(full))
             except OSError:
                 continue
+        quota = self.provider_quota()
+        resets_in = (quota.get('reset_at', 0) - time.time()) if quota.get('reset_at') else 0
         return {
             'configured': self.configured,
+            'provider_limit': quota.get('limit'),
+            'provider_remaining': quota.get('remaining'),
+            'provider_resets_in_days': round(resets_in / 86400, 1) if resets_in > 0 else None,
+            'exhausted': bool(quota) and quota.get('remaining') == 0,
             'cached_responses': len(entries),
             'oldest_hours': round(max(entries) / 3600, 1) if entries else 0,
             'newest_minutes': round(min(entries) / 60, 1) if entries else 0,
@@ -267,18 +323,21 @@ class HotelRatesTool(ToolBase):
         # Past the daily ceiling, stale data beats spending a quota the
         # traveller cannot see — as long as we say it is stale.
         if self.budget_left() <= 0:
+            quota = self.provider_quota()
+            resets = quota.get('reset_at', 0) - time.time()
+            why = (f"the Booking.com plan's {quota.get('limit')} monthly requests are "
+                   f"used up (resets in {resets / 86400:.0f} days)"
+                   if quota else f'the local cap of {DAILY_LIMIT} lookups a day is reached')
             if cached is not None:
                 return cached, Provenance(
                     'booking_rapidapi', SourceStatus.CACHED, url=url,
                     attribution=ATTRIBUTION,
-                    detail=(f'STALE: cached {self._age_label(age_s)} ago. The daily '
-                            f'limit of {DAILY_LIMIT} live lookups is used up, so this '
-                            f'was not refreshed. Reset it in settings to fetch again.'))
+                    detail=(f'STALE: cached {self._age_label(age_s)} ago and not '
+                            f'refreshed, because {why}.'))
             return None, Provenance(
                 'booking_rapidapi', SourceStatus.UNAVAILABLE, url=url,
-                detail=(f'The daily limit of {DAILY_LIMIT} live hotel lookups is used '
-                        f'up and nothing matching is cached. Raise or reset it in '
-                        f'settings, or try again tomorrow.'))
+                detail=(f'No prices for this search: nothing matching is cached and '
+                        f'{why}.'))
 
         try:
             with self._lock:
@@ -290,12 +349,20 @@ class HotelRatesTool(ToolBase):
             return None, Provenance('booking_rapidapi', SourceStatus.FAILED, url=url,
                                     detail=f'{type(exc).__name__}: {exc}')
 
+        self._record_quota(resp.headers)
+
         if resp.status_code == 403:
             return None, Provenance('booking_rapidapi', SourceStatus.NOT_CONFIGURED, url=url,
                                     detail=f'RapidAPI key is not subscribed to {RAPIDAPI_HOST}. {SETUP_HINT}')
         if resp.status_code == 429:
-            return None, Provenance('booking_rapidapi', SourceStatus.FAILED, url=url,
-                                    detail='RapidAPI monthly quota exhausted for this key (HTTP 429)')
+            quota = self.provider_quota()
+            resets = quota.get('reset_at', 0) - time.time()
+            when = (f', resets in {resets / 86400:.0f} days' if resets > 0 else '')
+            return None, Provenance(
+                'booking_rapidapi', SourceStatus.UNAVAILABLE, url=url,
+                detail=(f"The Booking.com plan's allowance of "
+                        f"{quota.get('limit', 'its monthly')} requests is used up"
+                        f"{when}. Cached prices still work."))
         if resp.status_code != 200:
             return None, Provenance('booking_rapidapi', SourceStatus.FAILED, url=url,
                                     detail=f'HTTP {resp.status_code}: {resp.text[:160]}')
