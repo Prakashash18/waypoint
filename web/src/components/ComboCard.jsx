@@ -58,7 +58,9 @@ export default function ComboCard({ combo, onOpen, onAsk }) {
 
       <footer className="combo-foot">
         <button type="button" className="btn-secondary is-small"
-                onClick={() => onAsk(`Tell me more about the ${combo.label.toLowerCase()} option`)}>
+                onClick={() => onAsk(
+                  `Tell me more about ${hotel.name}${hotel.area ? ` in ${hotel.area}` : ''}` +
+                  ` — what is it actually like, and what is nearby?`)}>
           Ask about this
         </button>
         <a className="btn-secondary is-small" href={hotel.booking_url || hotel.website || '#'}

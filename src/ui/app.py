@@ -28,6 +28,9 @@ from src.agent import (
 )
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 CORS(app)
 
@@ -628,6 +631,7 @@ def plan_trip():
             'packages': _packages_from(result),
             'trip': _trip_from(result),
             'combos': _combos_from(result),
+            'cards': _cards_from(result, _snapshot(None)),
             'response': result['answer'],
             **result,
         })
@@ -650,10 +654,13 @@ def agent_plan():
             return jsonify({'success': False,
                             'error': 'request is required'}), 400
         session = sessions.get_or_create(data.get('session_id'), data.get('user_id'))
+        before = _snapshot(session)
         result = _agent().plan(brief, context=data.get('context'), session=session)
         return jsonify({'success': True, 'packages': _packages_from(result),
                         'trip': _trip_from(result),
-                       'combos': _combos_from(result), **result})
+                        'combos': _combos_from(result),
+                        'cards': _cards_from(result, before),
+                        'follow_ups': _follow_ups(result), **result})
     except Exception as e:
         app.logger.exception('agent plan failed')
         return jsonify({'success': False, 'error': str(e)}), 400
@@ -675,6 +682,7 @@ def agent_stream():
     brief = (data.get('request') or _brief_from_params(data)).strip()
     context = data.get('context') or data
     session = sessions.get_or_create(data.get('session_id'), data.get('user_id'))
+    before = _snapshot(session)
 
     events: "_queue.Queue" = _queue.Queue()
     DONE = object()
@@ -686,7 +694,9 @@ def agent_stream():
                 on_step=lambda step: events.put(('step', step.to_dict())))
             events.put(('done', {'packages': _packages_from(result),
                                  'trip': _trip_from(result),
-                       'combos': _combos_from(result), **result}))
+                                 'combos': _combos_from(result),
+                                 'cards': _cards_from(result, before),
+                                 'follow_ups': _follow_ups(result), **result}))
         except Exception as exc:
             app.logger.exception('agent stream failed')
             events.put(('error', {'error': str(exc)}))
@@ -970,6 +980,148 @@ def _trip_from(result: dict) -> dict:
         'locale': locale or None,
         'alternatives': [h for h in hotels if h is not hotel][:8],
     }
+
+
+def _snapshot(session) -> dict:
+    """What we knew before this turn, for comparing against afterwards."""
+    if session is None:
+        return {}
+    artifacts = session.artifacts or {}
+    return {
+        'hotels': {h.get('hotel_id'): h.get('total_price')
+                   for h in (artifacts.get('hotels') or []) if h.get('hotel_id')},
+        'flight_price': _best_flight(artifacts).get('price_total'),
+        'dates': (_best_flight(artifacts).get('outbound') or {}).get('depart', '')[:10],
+    }
+
+
+def _best_flight(artifacts: dict) -> dict:
+    """The cheapest flight we hold, wherever it came from.
+
+    A flexible-date search stores offers under `windows`, not `flights`, so
+    looking only at `flights` made every price comparison come back empty.
+    """
+    flights = artifacts.get('flights') or []
+    if flights:
+        return min(flights, key=lambda f: f.get('price_total') or 1e9) or {}
+    windows = artifacts.get('windows') or []
+    if windows:
+        return (min(windows, key=lambda w: w.get('price_total') or 1e9) or {}).get('offer') or {}
+    return {}
+
+
+def _cards_from(result: dict, before: dict) -> list:
+    """Structured cards for a reply, so an answer is not only prose.
+
+    A traveller asking "what if we left on the 26th?" wants to see the number
+    move, not read a paragraph about it. These carry the parts worth showing:
+    what a price did, and which stay is being talked about.
+    """
+    cards = []
+    artifacts = result.get('artifacts') or {}
+    hotels = artifacts.get('hotels') or []
+    answer = (result.get('answer') or '').lower()
+
+    # What the flight fare did between turns.
+    now_flight = _best_flight(artifacts)
+
+    was = before.get('flight_price')
+    now = (now_flight or {}).get('price_total')
+    if was is not None and now is not None and abs(now - was) > 0.01:
+        cards.append({
+            'kind': 'price_change',
+            'title': 'Flights',
+            'from': round(was, 2), 'to': round(now, 2),
+            'delta': round(now - was, 2),
+            'currency': (now_flight or {}).get('currency', 'USD'),
+            'detail': (f"{now_flight.get('flight_code')} "
+                       f"{now_flight.get('origin')}→{now_flight.get('destination')}"
+                       if now_flight else ''),
+        })
+
+    # Stays whose price moved since the last turn.
+    for hotel in hotels:
+        hid, price = hotel.get('hotel_id'), hotel.get('total_price')
+        prev = before.get('hotels', {}).get(hid)
+        if prev is not None and price is not None and abs(price - prev) > 0.01:
+            cards.append({
+                'kind': 'price_change',
+                'title': hotel.get('name', 'Stay'),
+                'from': round(prev, 2), 'to': round(price, 2),
+                'delta': round(price - prev, 2),
+                'currency': hotel.get('currency', 'USD'),
+                'detail': f"{hotel.get('nights')} nights" if hotel.get('nights') else '',
+            })
+
+    # Whichever stays the reply is actually about, so the answer has a face.
+    named = [h for h in hotels if h.get('name') and h['name'].lower() in answer]
+    for hotel in named[:2]:
+        cards.append({
+            'kind': 'stay',
+            'hotel_id': hotel.get('hotel_id'),
+            'name': hotel.get('name'),
+            'area': hotel.get('area'),
+            'image_url': hotel.get('image_url'),
+            'review_score': hotel.get('review_score'),
+            'review_count': hotel.get('review_count'),
+            'total_price': hotel.get('total_price'),
+            'price_per_night': hotel.get('price_per_night'),
+            'currency': hotel.get('currency'),
+            'nights': hotel.get('nights'),
+            'booking_url': hotel.get('booking_url') or hotel.get('website'),
+        })
+
+    return cards[:4]
+
+
+def _follow_ups(result: dict) -> list:
+    """Two or three questions worth asking next.
+
+    Written by a small model against the answer that was actually given, so
+    they follow the conversation rather than being a fixed menu. Falls back to
+    questions derived from the results if that call fails — a follow-up strip
+    is never worth failing a request over.
+    """
+    artifacts = result.get('artifacts') or {}
+    hotels = artifacts.get('hotels') or []
+    named = hotels[0].get('name') if hotels else None
+
+    fallback = [q for q in (
+        f'Is {named} quiet at night?' if named else None,
+        f'What is within walking distance of {named}?' if named else None,
+        'Which dates would save the most?' if artifacts.get('windows') else None,
+        'Anything with a pool?',
+    ) if q][:3]
+
+    if not os.getenv('OPENAI_API_KEY'):
+        return fallback
+
+    try:
+        import openai
+        client = openai.OpenAI()
+        reply = client.chat.completions.create(
+            model='gpt-4o-mini', temperature=0.4, max_tokens=120,
+            response_format={'type': 'json_object'},
+            messages=[
+                {'role': 'system', 'content':
+                 'You suggest what a traveller might ask next. Return JSON '
+                 '{"questions": ["...", "...", "..."]}. Each is one short '
+                 'question in the traveller\'s voice, under 9 words, answerable '
+                 'from flights, hotel rates, photos, maps or area information. '
+                 'Name real hotels or dates from the context. Never repeat what '
+                 'the answer already said.'},
+                {'role': 'user', 'content':
+                 f"They asked: {result.get('request', '')}\n\n"
+                 f"Answer given: {(result.get('answer') or '')[:900]}\n\n"
+                 f"Stays available: {', '.join(h.get('name', '') for h in hotels[:5])}"},
+            ],
+        )
+        questions = json.loads(reply.choices[0].message.content).get('questions') or []
+        cleaned = [q.strip() for q in questions if isinstance(q, str) and 3 < len(q.strip()) < 90]
+        return cleaned[:3] or fallback
+    except Exception as exc:
+        logger.debug('follow-up generation failed: %s', exc)
+        return fallback
 
 
 def _combos_from(result: dict) -> list:

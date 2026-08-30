@@ -18,6 +18,7 @@ import Settings from './components/Settings'
 import ComboCard from './components/ComboCard'
 import TripDetail from './components/TripDetail'
 import NeedsBar from './components/NeedsBar'
+import ChatThread from './components/ChatThread'
 import TracePanel from './components/TracePanel'
 import { Pin, Crosshair } from './components/Icons'
 
@@ -53,6 +54,9 @@ export default function App() {
   // A date can be previewed without spending a search: the windows were all
   // priced already, so swapping one just re-does the arithmetic on screen.
   const [previewDate, setPreviewDate] = useState(null)
+  // The visible conversation. The agent keeps its own history server-side;
+  // this is what the traveller can actually read.
+  const [messages, setMessages] = useState([])
 
   const voice = useVoice({ enabled: voiceOut })
   const { locale, origin, airports } = useLocale()
@@ -77,6 +81,7 @@ export default function App() {
     setLiveSteps([])
     setConversing(true)
     setPreviewDate(null)
+    setMessages((prev) => [...prev, { role: 'user', text: request }])
     // The HUD used to render below the fold, so nothing appeared to happen.
     window.scrollTo({ top: 0, behavior: 'smooth' })
     const controller = new AbortController()
@@ -105,6 +110,10 @@ export default function App() {
           },
         })
       setResult(data)
+      setMessages((prev) => [...prev, {
+        role: 'assistant', text: data.answer,
+        lookups: data.tool_calls, cards: data.cards || [],
+      }])
       if (spoken && voiceOut) voice.say(spokenSummary(data))
 
     } catch (e) {
@@ -115,6 +124,12 @@ export default function App() {
       abortRef.current = null
     }
   }, [brief, busy, voice, voiceOut, locale, origin, sessionId])
+
+  /** Ask a follow-up. Clears the box so the thread is the record, not the input. */
+  const ask = useCallback((question) => {
+    setBrief('')
+    run(question, { spoken: voiceOut })
+  }, [run, voiceOut])
 
   /** Interrupt the run. Whatever was found so far is kept. */
   const stop = useCallback(async () => {
@@ -131,6 +146,7 @@ export default function App() {
     setLiveSteps([])
     setBrief('')
     setConversing(false)
+    setMessages([])
   }, [sessionId])
 
   const onTranscript = useCallback((text) => {
@@ -266,25 +282,24 @@ export default function App() {
         {/* ── answer ──────────────────────────────────────── */}
         {result && (
           <div className="results" ref={resultsRef}>
-            {combos.length > 0 ? (
-              <>
-                <div className="combos">
-                  {combos.map((c) => (
-                    <ComboCard key={c.label} combo={c}
-                               onOpen={() => setOpenCombo(c)}
-                               onAsk={(q) => { setBrief(q); run(q, { spoken: true }) }} />
-                  ))}
-                </div>
-                <p className="combos-hint">
-                  Tap an option to open it, or just ask — “is there anything quieter?”,
-                  “what about the 26th?”
-                </p>
-              </>
-            ) : (
-              <section className="card answer-card">
-                <Answer text={result.answer} busy={false} />
-              </section>
+            {combos.length > 0 && (
+              <div className="combos">
+                {combos.map((c) => (
+                  <ComboCard key={c.label} combo={c}
+                             onOpen={() => setOpenCombo(c)}
+                             onAsk={(q) => ask(q)} />
+                ))}
+              </div>
             )}
+
+            <ChatThread messages={messages} busy={busy} onAsk={ask}
+                        onOpenStay={(card) => {
+                          const full = (result.artifacts?.hotels || [])
+                            .find((h) => h.hotel_id === card.hotel_id)
+                          if (full) setOpenHotel(full)
+                        }}
+                        suggestions={result.follow_ups?.length
+                          ? result.follow_ups : followUps(combos, trip)} />
 
             {trip?.windows?.length > 0 && (
               <DateWindows
@@ -298,13 +313,6 @@ export default function App() {
                   setBrief(q); run(q, { spoken: false })
                 }}
               />
-            )}
-
-            {combos.length > 0 && (
-              <details className="work">
-                <summary>What we found, in full</summary>
-                <div className="work-body"><Answer text={result.answer} busy={false} /></div>
-              </details>
             )}
 
             <details className="work" open={showWork}
@@ -372,6 +380,17 @@ function onScreen(result) {
     windows: (trip.windows || []).slice(0, 9),
     locale: trip.locale || null,
   }
+}
+
+/** Questions worth asking about these specific results. */
+function followUps(combos, trip) {
+  const out = []
+  if (combos.length > 1) out.push(`What is the real difference between ${combos[0].label.toLowerCase()} and ${combos[1].label.toLowerCase()}?`)
+  const named = combos[0]?.hotel?.name
+  if (named) out.push(`Is ${named} quiet at night?`)
+  if (named) out.push(`What is within walking distance of ${named}?`)
+  if ((trip?.windows || []).length > 1) out.push('Which dates would save the most?')
+  return out.slice(0, 4)
 }
 
 function originLabel(origin) {
