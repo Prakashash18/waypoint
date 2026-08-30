@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { money, clockTime, duration, dateRange } from '../lib/format'
-import { Plane, Info } from './Icons'
+import { Plane, Info, Traveller, Night } from './Icons'
 
 /** One whole trip: the flight, the stay, and what the two cost together.
  *
@@ -31,9 +31,21 @@ export default function ComboCard({ combo, onOpen, onChoose, onAsk }) {
         </div>
         <p className="combo-total">
           <span className="serif">{money(combo.total, currency, { round: true })}</span>
+          {/* Each count carries its own icon and noun — "for 2 · 4 nights"
+              ran the two numbers together. */}
           <span className="combo-unit">
-            {combo.passengers > 1 ? `for ${combo.passengers}` : ''}
-            {combo.nights ? `${combo.passengers > 1 ? ' · ' : ''}${combo.nights} nights` : ''}
+            {combo.passengers > 0 && (
+              <span className="meta-unit">
+                <Traveller />
+                {combo.passengers}&nbsp;{combo.passengers === 1 ? 'traveller' : 'travellers'}
+              </span>
+            )}
+            {combo.nights > 0 && (
+              <span className="meta-unit">
+                <Night />
+                {combo.nights}&nbsp;{combo.nights === 1 ? 'night' : 'nights'}
+              </span>
+            )}
           </span>
         </p>
         {dates && <p className="combo-dates">{dates}</p>}

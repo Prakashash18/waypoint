@@ -22,7 +22,8 @@ import ChatThread from './components/ChatThread'
 import ChosenTrip from './components/ChosenTrip'
 import TripStrip from './components/TripStrip'
 import TracePanel from './components/TracePanel'
-import { Pin, Crosshair } from './components/Icons'
+import { Pin, Crosshair, Mic } from './components/Icons'
+import TopbarMenu from './components/TopbarMenu'
 
 const EXAMPLES = [
   'A few quiet nights in Bali, under $900, whenever is cheapest',
@@ -269,24 +270,39 @@ export default function App() {
               <Crosshair /> {origin.iata}
             </span>
           )}
+          {/* Wide enough: everything spelled out. Narrow: status stays, the
+              rest folds into a menu. */}
           {result && (
-            <button type="button" className="chip" onClick={startOver}
+            <button type="button" className="chip is-wide-only" onClick={startOver}
                     title="The agent forgets this conversation and starts fresh">
               Start over
             </button>
           )}
-          <button type="button" className="chip" onClick={() => setShowSettings(true)}
+          <button type="button" className="chip is-wide-only"
+                  onClick={() => setShowSettings(true)}
                   title="Prices, saved data and today’s allowance">
             Settings
           </button>
+
           <button
             type="button"
             className={`chip toggle${voiceOut ? ' is-on' : ''}`}
             onClick={() => { setVoiceOut((v) => !v); voice.stopSpeaking() }}
             aria-pressed={voiceOut}
+            title={voiceOut ? 'Spoken replies are on' : 'Spoken replies are off'}
           >
-            {voiceOut ? 'Voice on' : 'Voice off'}
+            <span className="chip-icon" aria-hidden="true"><Mic size={15} /></span>
+            <span className="chip-text">{voiceOut ? 'Voice on' : 'Voice off'}</span>
           </button>
+
+          <span className="is-narrow-only">
+            <TopbarMenu items={[
+              result && { label: 'Start over', note: 'forget this conversation',
+                          onClick: startOver },
+              { label: 'Settings', note: 'prices and allowance',
+                onClick: () => setShowSettings(true) },
+            ]} />
+          </span>
         </div>
       </header>
 

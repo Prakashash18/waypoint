@@ -52,3 +52,16 @@ export const Close = ({ size = 18 }) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 )
+
+export const Traveller = ({ size = 14 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} {...base} aria-hidden="true">
+    <circle cx="12" cy="7.5" r="3.6" />
+    <path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" />
+  </svg>
+)
+
+export const Night = ({ size = 14 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} {...base} aria-hidden="true">
+    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
+  </svg>
+)

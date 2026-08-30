@@ -1,5 +1,5 @@
 import { money, clockTime, shortDate, duration, dateRange } from '../lib/format'
-import { Back, External, Mic, Plane } from './Icons'
+import { Back, External, Mic, Plane, Traveller, Night } from './Icons'
 
 /** Step 2: the one trip being considered, opened up.
  *
@@ -36,9 +36,23 @@ export default function ChosenTrip({ combo, onBack, onBookFlight, onOpenStay, ot
             </div>
             <p className="chosen-total">
               <span className="serif">{money(combo.total, currency, { round: true })}</span>
-              <span>
-                {combo.passengers > 1 ? `for ${combo.passengers}` : ''}
-                {combo.nights ? `${combo.passengers > 1 ? ' · ' : ''}${combo.nights} nights` : ''}
+              {/* "for 2 · 4 nights" read as one muddled number pair, so each
+                  count now carries its own icon and its own noun. */}
+              <span className="chosen-meta">
+                {combo.passengers > 0 && (
+                  <span className="meta-unit"
+                        title={`${combo.passengers} ${combo.passengers === 1 ? 'traveller' : 'travellers'}`}>
+                    <Traveller />
+                    {combo.passengers}&nbsp;{combo.passengers === 1 ? 'traveller' : 'travellers'}
+                  </span>
+                )}
+                {combo.nights > 0 && (
+                  <span className="meta-unit"
+                        title={`${combo.nights} ${combo.nights === 1 ? 'night' : 'nights'}`}>
+                    <Night />
+                    {combo.nights}&nbsp;{combo.nights === 1 ? 'night' : 'nights'}
+                  </span>
+                )}
               </span>
               <span className="chosen-dates">
                 {dateRange(combo.check_in || hotel.check_in, combo.check_out || hotel.check_out)}

@@ -617,7 +617,10 @@ img { max-width: 100%; }
 }
 .combo-total { margin: 0; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
 .combo-total .serif { font-size: 34px; line-height: 1; }
-.combo-unit { font-size: 15px; color: var(--dim); }
+.combo-unit {
+  display: flex; flex-wrap: wrap; gap: 3px 12px;
+  margin-top: 5px; font-size: 15px; color: var(--dim);
+}
 
 .combo-stay {
   display: flex; align-items: center; gap: 11px; text-align: left; width: 100%;
@@ -805,7 +808,7 @@ img { max-width: 100%; }
 .chosen-score.is-none { color: var(--faint); font-weight: 400; }
 .chosen-total { margin: 0; text-align: right; }
 .chosen-total .serif { display: block; font-size: 34px; line-height: 1; }
-.chosen-total span:last-child { font-size: 14px; color: var(--dim); }
+.chosen-total > span:last-child { font-size: 14px; color: var(--dim); }
 
 .chosen-split { display: flex; gap: 28px; flex-wrap: wrap;
   padding: 15px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -968,3 +971,52 @@ img { max-width: 100%; }
   font: 600 13.5px/1 var(--sans); color: var(--accent);
   background: var(--accent-soft); padding: 6px 11px; border-radius: 999px;
 }
+
+/* ── header at narrow widths ─────────────────────────────────── */
+/* The bar wanted 401px of a 375px screen. Status (where you fly from, whether
+   voice is on) stays visible; the rest folds into a menu. */
+
+.is-narrow-only { display: none; }
+.chip-icon { display: none; }
+
+@media (max-width: 560px) {
+  .is-wide-only { display: none; }
+  .is-narrow-only { display: inline-flex; }
+  .topbar { gap: 8px; padding-left: 14px; padding-right: 14px; }
+  .brand .serif { font-size: 17px; }
+  .topbar-right { gap: 6px; }
+  .chip { padding: 8px 10px; }
+  /* The voice toggle becomes its own icon so the label stops eating the row. */
+  .chip.toggle .chip-text { display: none; }
+  .chip.toggle .chip-icon { display: inline-flex; }
+  .chip.toggle { width: 40px; height: 40px; justify-content: center; padding: 0; }
+}
+
+.topmenu { position: relative; display: inline-flex; }
+.topmenu-trigger { width: 40px; height: 40px; justify-content: center; padding: 0; }
+.topmenu-list {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  min-width: 216px; list-style: none; padding: 6px; margin: 0;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow);
+}
+.topmenu-list button {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  width: 100%; min-height: 46px; padding: 10px 12px; text-align: left;
+  background: transparent; border: 0; border-radius: 8px; cursor: pointer;
+  font: 600 15px/1.3 var(--sans); color: var(--ink);
+}
+.topmenu-list button:hover { background: var(--surface-2); }
+.topmenu-note { font: 400 13.5px/1.3 var(--sans); color: var(--faint); }
+
+/* Each count keeps its own icon and noun — "for 2 · 4 nights" read as one
+   muddled pair of numbers. */
+.chosen-meta {
+  display: flex; flex-wrap: wrap; justify-content: flex-end;
+  gap: 4px 12px; margin-top: 6px;
+}
+.meta-unit {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 14px; color: var(--dim); white-space: nowrap;
+}
+.meta-unit svg { flex: none; opacity: .8; }
