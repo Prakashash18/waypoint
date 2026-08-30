@@ -464,3 +464,72 @@ button.chip:hover { color: var(--ink); border-color: var(--accent); }
 .card, .hotel-card, .sheet { max-width: 100%; }
 img { max-width: 100%; }
 .results > *, .pair > * { min-width: 0; }
+
+/* ── agent HUD ───────────────────────────────────────────────── */
+/* Shown while the agent works. Every line is a real tool call and the plane
+   advances one leg per completed call, so nothing here is decoration. */
+
+.hud {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 22px 22px 18px; margin-top: 22px;
+}
+
+.hud-route {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  margin: 6px 4px 22px;
+}
+.hud-dot { width: 9px; height: 9px; border-radius: 999px; flex: none;
+  background: var(--faint); }
+.hud-dot.is-origin { background: var(--accent); }
+.hud-line { position: relative; flex-grow: 1; height: 2px;
+  background: repeating-linear-gradient(90deg,
+    var(--line) 0 6px, transparent 6px 12px); }
+.hud-trail {
+  position: absolute; inset: 0 auto 0 0; height: 2px; background: var(--accent);
+  transition: width .7s cubic-bezier(.22,.61,.36,1);
+}
+.hud-plane {
+  position: absolute; top: 50%; color: var(--accent);
+  transform: translate(-50%, -50%); display: flex;
+  transition: left .7s cubic-bezier(.22,.61,.36,1);
+  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--accent) 40%, transparent));
+}
+
+.hud-steps { list-style: none; padding: 0; margin: 0; }
+.hud-step {
+  display: flex; align-items: center; gap: 12px; padding: 9px 0;
+  border-bottom: 1px solid var(--line); font-size: 14px;
+  animation: hud-in .32s ease both;
+}
+.hud-step:last-child { border-bottom: 0; }
+@keyframes hud-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.hud-glyph { color: var(--faint); display: flex; width: 18px; justify-content: center; flex: none; }
+.hud-step.is-live .hud-glyph { color: var(--accent); }
+.hud-label { flex-grow: 1; min-width: 0; }
+.hud-step.is-live .hud-label { color: var(--ink); font-weight: 600; }
+.hud-count { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums;
+  font-family: var(--mono); white-space: nowrap; }
+.hud-step.is-empty .hud-count { color: var(--warn); }
+.hud-step.is-pending .hud-label { color: var(--dim); }
+
+.hud-pulse {
+  width: 9px; height: 9px; border-radius: 999px; background: var(--accent);
+  animation: hud-pulse 1.15s ease-in-out infinite;
+}
+@keyframes hud-pulse {
+  0%, 100% { opacity: .25; transform: scale(.8); }
+  50%      { opacity: 1;   transform: scale(1.15); }
+}
+
+.hud-note { margin: 12px 0 0; font-size: 12.5px; color: var(--faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-step { animation: none; }
+  .hud-pulse { animation-duration: 2.4s; }
+  .hud-trail, .hud-plane { transition: none; }
+}
+.score.is-none span { color: var(--faint); font-size: 12px; }

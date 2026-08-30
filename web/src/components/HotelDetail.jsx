@@ -56,8 +56,9 @@ export default function HotelDetail({ hotel, onClose, onAsk }) {
             <div>
               <h2 className="serif">{hotel.name}</h2>
               <p className="hotel-where">
-                {[hotel.review_score && `${hotel.review_score}/10`,
-                  hotel.review_word, hotel.area || hotel.address]
+                {[hotel.review_score > 0 ? `${hotel.review_score}/10` : 'No reviews yet',
+                  hotel.review_score > 0 ? hotel.review_word : null,
+                  hotel.area || hotel.address]
                   .filter(Boolean).join(' · ')}
               </p>
             </div>

@@ -28,11 +28,13 @@ export default function HotelCard({ hotel, onOpen, compact = false }) {
       <div className="hotel-body">
         <div className="hotel-head">
           <h3 className="serif">{hotel.name}</h3>
-          {hotel.review_score != null && (
+          {hotel.review_score > 0 ? (
             <p className="score">
               <strong>{hotel.review_score}</strong>
               {hotel.review_count ? <span>{hotel.review_count} reviews</span> : null}
             </p>
+          ) : (
+            <p className="score is-none"><span>no reviews yet</span></p>
           )}
         </div>
 

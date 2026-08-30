@@ -657,53 +657,56 @@ def agent_plan():
 
 @app.route('/api/agent/stream', methods=['POST'])
 def agent_stream():
-    """Same as /api/agent/plan but streams each tool call as it happens."""
+    """Plan a trip, emitting each tool call the moment it happens.
+
+    The previous version ran the whole plan and only then yielded the steps it
+    had collected, so nothing reached the browser until the work was already
+    finished — a streaming endpoint that did not stream. The planner now runs on
+    its own thread and pushes steps through a queue as they occur.
+    """
+    import queue as _queue
+    import threading
+
     data = request.json or {}
     brief = (data.get('request') or _brief_from_params(data)).strip()
     context = data.get('context') or data
 
-    def generate():
-        queue: list = []
+    events: "_queue.Queue" = _queue.Queue()
+    DONE = object()
+
+    def work():
         try:
-            result = _agent().plan(brief, context=context,
-                                   on_step=lambda s: queue.append(s.to_dict()))
-            for step in queue:
-                yield f"event: step\ndata: {json.dumps(step)}\n\n"
-            payload = {'packages': _packages_from(result),
-                       'trip': _trip_from(result), **result}
-            yield f"event: done\ndata: {json.dumps(payload, default=str)}\n\n"
-        except Exception as e:
+            result = _agent().plan(
+                brief, context=context,
+                on_step=lambda step: events.put(('step', step.to_dict())))
+            events.put(('done', {'packages': _packages_from(result),
+                                 'trip': _trip_from(result), **result}))
+        except Exception as exc:
             app.logger.exception('agent stream failed')
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            events.put(('error', {'error': str(exc)}))
+        finally:
+            events.put((DONE, None))
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def generate():
+        # Open immediately so the browser starts rendering rather than waiting
+        # on the first tool call, which can be a second or two away.
+        yield 'event: open\ndata: {}\n\n'
+        while True:
+            try:
+                kind, payload = events.get(timeout=20)
+            except _queue.Empty:
+                yield ': keepalive\n\n'   # hold the connection through a slow call
+                continue
+            if kind is DONE:
+                break
+            yield f"event: {kind}\ndata: {json.dumps(payload, default=str)}\n\n"
 
     return Response(generate(), mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache',
+                             'Connection': 'keep-alive',
                              'X-Accel-Buffering': 'no'})
-
-
-@app.route('/api/health')
-def health():
-    """Liveness plus a readiness summary, for the platform and for humans."""
-    from src.tools import tool_registry
-
-    atlas_ok, atlas_note = _atlas_status()
-    rates = tool_registry.get('hotel_rates')
-    ready = {
-        'openai': bool(os.getenv('OPENAI_API_KEY')),
-        'atlas_cli': atlas_ok,
-        'hotel_rates': bool(getattr(rates, 'configured', False)),
-        'screenshots': _playwright_available(),
-        'voice': bool(os.getenv('ELEVENLABS_API_KEY')),
-        'delays': bool(os.getenv('AVIATIONSTACK_API_KEY')),
-    }
-    # The app is up and useful as long as it can plan; individual providers
-    # degrade honestly on their own.
-    return jsonify({
-        'status': 'ok' if ready['openai'] else 'degraded',
-        'ready': ready,
-        'notes': {k: v for k, v in (('atlas_cli', atlas_note),) if v},
-        'tools': len(tool_registry.list_tools()),
-    }), 200
 
 
 @app.route('/api/sources', methods=['GET'])

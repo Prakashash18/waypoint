@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { planTrip, getVoiceStatus } from './api'
+import { planTripStreaming, getVoiceStatus } from './api'
 import { useVoice } from './hooks/useVoice'
 import { useLocale } from './hooks/useLocale'
 import { money } from './lib/format'
@@ -13,6 +13,7 @@ import KeepTalking from './components/KeepTalking'
 import HotelDetail from './components/HotelDetail'
 import BookingSheet from './components/BookingSheet'
 import Answer from './components/Answer'
+import AgentHUD from './components/AgentHUD'
 import TracePanel from './components/TracePanel'
 import { Pin, Crosshair } from './components/Icons'
 
@@ -26,6 +27,7 @@ export default function App() {
   const [brief, setBrief] = useState('')
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [liveSteps, setLiveSteps] = useState([])
   const [error, setError] = useState('')
   const [voiceReady, setVoiceReady] = useState(false)
   const [voiceOut, setVoiceOut] = useState(true)
@@ -49,13 +51,17 @@ export default function App() {
     if (!request || busy) return
     setBusy(true)
     setError('')
+    setLiveSteps([])
     try {
       const context = {
         locale,
         lat: locale?.lat, lon: locale?.lon, timezone: locale?.timezone,
         origin_airport: origin?.iata,
       }
-      const data = await planTrip(request, context)
+      // Streamed so the HUD can show each lookup as it happens, rather than
+      // holding a spinner for the whole 15-odd seconds.
+      const data = await planTripStreaming(request, context,
+        (step) => setLiveSteps((prev) => [...prev, step]))
       setResult(data)
       if (spoken && voiceOut) voice.say(spokenSummary(data))
       requestAnimationFrame(() =>
@@ -164,9 +170,7 @@ export default function App() {
 
         {(voice.error || error) && <p className="error" role="alert">{voice.error || error}</p>}
 
-        {busy && !result && (
-          <p className="working"><span className="spinner" /> Asking the airlines and the hotels…</p>
-        )}
+        {busy && <AgentHUD steps={liveSteps} done={false} />}
 
         {/* ── answer ──────────────────────────────────────── */}
         {result && (
@@ -283,7 +287,8 @@ function spokenSummary(result) {
   }
   if (trip.hotel) {
     parts.push(`The stay is ${trip.hotel.name}${
-      trip.hotel.review_score ? `, rated ${trip.hotel.review_score} out of ten` : ''}.`)
+      trip.hotel.review_score > 0 ? `, rated ${trip.hotel.review_score} out of ten`
+                                  : ', though it has no reviews yet'}.`)
   }
   if (trip.flight?.flight_code) {
     parts.push(`Flying ${trip.flight.flight_code} from ${trip.flight.origin}.`)
