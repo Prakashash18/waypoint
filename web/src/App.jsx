@@ -14,6 +14,7 @@ import HotelDetail from './components/HotelDetail'
 import BookingSheet from './components/BookingSheet'
 import Answer from './components/Answer'
 import AgentHUD from './components/AgentHUD'
+import Settings from './components/Settings'
 import TracePanel from './components/TracePanel'
 import { Pin, Crosshair } from './components/Icons'
 
@@ -40,6 +41,7 @@ export default function App() {
   const [openHotel, setOpenHotel] = useState(null)
   const [booking, setBooking] = useState(null)
   const [showWork, setShowWork] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const voice = useVoice({ enabled: voiceOut })
   const { locale, origin, airports } = useLocale()
@@ -66,6 +68,10 @@ export default function App() {
         locale,
         lat: locale?.lat, lon: locale?.lon, timezone: locale?.timezone,
         origin_airport: origin?.iata,
+        // What the traveller can actually see. The server's session is held in
+        // memory, so a restart or a sleeping instance loses it — this lets a
+        // follow-up still refer to the results on screen.
+        seen: onScreen(result),
       }
       // Streamed so the HUD can show each lookup as it happens, rather than
       // holding a spinner for the whole 15-odd seconds.
@@ -137,6 +143,10 @@ export default function App() {
               Start over
             </button>
           )}
+          <button type="button" className="chip" onClick={() => setShowSettings(true)}
+                  title="Prices, saved data and today’s allowance">
+            Settings
+          </button>
           <button
             type="button"
             className={`chip toggle${voiceOut ? ' is-on' : ''}`}
@@ -305,12 +315,32 @@ export default function App() {
         <HotelDetail hotel={openHotel} onClose={() => setOpenHotel(null)}
                      onAsk={(t) => { setOpenHotel(null); setBrief(t); run(t, { spoken: true }) }} />
       )}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       {booking && (
         <BookingSheet flight={booking} voice={voiceOut ? voice : null}
                       onClose={() => setBooking(null)} />
       )}
     </div>
   )
+}
+
+/** A compact picture of what is on screen, for follow-up questions. */
+function onScreen(result) {
+  const trip = result?.trip
+  if (!trip) return null
+  const hotels = (result.artifacts?.hotels || []).slice(0, 8).map((h) => ({
+    hotel_id: h.hotel_id, name: h.name, area: h.area,
+    total_price: h.total_price, price_per_night: h.price_per_night,
+    currency: h.currency, nights: h.nights,
+    review_score: h.review_score, review_count: h.review_count,
+    lat: h.lat, lon: h.lon, website: h.website, image_url: h.image_url,
+  }))
+  return {
+    hotels,
+    flight: trip.flight || null,
+    windows: (trip.windows || []).slice(0, 9),
+    locale: trip.locale || null,
+  }
 }
 
 function originLabel(origin) {

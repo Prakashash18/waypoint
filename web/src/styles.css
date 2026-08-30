@@ -536,3 +536,13 @@ img { max-width: 100%; }
 .btn-secondary.is-stop { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
 .btn-secondary.is-stop:hover { border-color: var(--bad); }
 .hud-step.is-stopping .hud-pulse { background: var(--bad); }
+
+/* ── quota ───────────────────────────────────────────────────── */
+.quota { margin: 4px 0 2px; }
+.quota-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; margin-bottom: 8px; font-size: 14px; }
+.quota-head strong { font-variant-numeric: tabular-nums; }
+.quota-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.quota-bar span { display: block; height: 100%; background: var(--good);
+  transition: width .4s ease; }
+.quota-bar span.is-high { background: var(--warn); }

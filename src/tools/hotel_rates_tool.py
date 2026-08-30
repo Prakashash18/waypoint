@@ -39,7 +39,20 @@ BASE = f'https://{RAPIDAPI_HOST}/api/v1'
 CACHE_DIR = os.getenv(
     'WAYPOINT_CACHE_DIR',
     os.path.join(os.path.dirname(__file__), '..', '..', '.cache', 'hotel_rates'))
-CACHE_TTL = 6 * 3600  # Rates move slowly enough that 6h is safe and saves quota.
+# The free RapidAPI tier is metered and small, so cache lifetimes are set per
+# endpoint by how fast the answer actually changes — a city's id never moves,
+# a hotel's photographs rarely do, and nightly rates drift slowly enough that a
+# day is fine for planning.
+CACHE_TTL = int(os.getenv('WAYPOINT_RATE_CACHE_TTL', 24 * 3600))
+ENDPOINT_TTL = {
+    '/hotels/searchDestination': int(os.getenv('WAYPOINT_DEST_CACHE_TTL', 30 * 86400)),
+    '/hotels/getHotelPhotos': int(os.getenv('WAYPOINT_PHOTO_CACHE_TTL', 7 * 86400)),
+}
+
+# A hard ceiling on live calls per UTC day. Past it we serve whatever is
+# cached, however old, and say so — better than silently spending a quota the
+# traveller cannot see. 0 disables live calls entirely (cache only).
+DAILY_LIMIT = int(os.getenv('WAYPOINT_RAPIDAPI_DAILY_LIMIT', 40))
 
 ATTRIBUTION = 'Rates, review scores and photos from Booking.com via RapidAPI'
 
@@ -119,6 +132,84 @@ class HotelRatesTool(ToolBase):
         key = hashlib.sha1(f'{path}|{sorted(params.items())}'.encode()).hexdigest()[:20]
         return os.path.join(self._cache_dir, f'{key}.json')
 
+    @staticmethod
+    def _ttl_for(path: str) -> int:
+        return ENDPOINT_TTL.get(path, CACHE_TTL)
+
+    # ── daily spend ledger ───────────────────────────────────────
+
+    @property
+    def _ledger_path(self) -> str:
+        return os.path.join(self._cache_dir, '_calls.json')
+
+    def _ledger(self) -> Dict[str, Any]:
+        try:
+            with open(self._ledger_path) as fh:
+                return json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _today(self) -> str:
+        return datetime.utcnow().strftime('%Y-%m-%d')
+
+    def spend_today(self) -> int:
+        return int(self._ledger().get(self._today(), 0))
+
+    def _record_call(self) -> None:
+        with self._lock:
+            ledger = self._ledger()
+            today = self._today()
+            ledger[today] = int(ledger.get(today, 0)) + 1
+            # Keep a week of history for the settings panel, drop the rest.
+            for day in sorted(ledger)[:-7]:
+                ledger.pop(day, None)
+            try:
+                with open(self._ledger_path, 'w') as fh:
+                    json.dump(ledger, fh)
+            except OSError as exc:
+                logger.warning('Could not write the call ledger: %s', exc)
+
+    def budget_left(self) -> int:
+        if DAILY_LIMIT <= 0:
+            return 0
+        return max(0, DAILY_LIMIT - self.spend_today())
+
+    def cache_stats(self) -> Dict[str, Any]:
+        """What the settings panel shows about the metered provider."""
+        entries = []
+        for name in os.listdir(self._cache_dir) if os.path.isdir(self._cache_dir) else []:
+            if not name.endswith('.json') or name.startswith('_'):
+                continue
+            full = os.path.join(self._cache_dir, name)
+            try:
+                entries.append(time.time() - os.path.getmtime(full))
+            except OSError:
+                continue
+        return {
+            'configured': self.configured,
+            'cached_responses': len(entries),
+            'oldest_hours': round(max(entries) / 3600, 1) if entries else 0,
+            'newest_minutes': round(min(entries) / 60, 1) if entries else 0,
+            'calls_today': self.spend_today(),
+            'daily_limit': DAILY_LIMIT,
+            'calls_left_today': self.budget_left(),
+            'history': self._ledger(),
+            'rate_ttl_hours': round(CACHE_TTL / 3600, 1),
+        }
+
+    def clear_cache(self) -> Dict[str, Any]:
+        """Explicit reset from settings — the next search fetches fresh."""
+        removed = 0
+        if os.path.isdir(self._cache_dir):
+            for name in os.listdir(self._cache_dir):
+                if name.endswith('.json') and not name.startswith('_'):
+                    try:
+                        os.remove(os.path.join(self._cache_dir, name))
+                        removed += 1
+                    except OSError:
+                        pass
+        return {'cleared': removed, 'calls_today': self.spend_today()}
+
     def _get(self, path: str, params: Dict[str, Any]) -> Tuple[Optional[Dict], Provenance]:
         """GET with disk cache. Returns (payload, provenance)."""
         url = f'{BASE}{path}'
@@ -128,16 +219,30 @@ class HotelRatesTool(ToolBase):
                                     url=url, detail=SETUP_HINT)
 
         cache_file = self._cache_path(path, params)
-        if os.path.exists(cache_file) and time.time() - os.path.getmtime(cache_file) < CACHE_TTL:
-            try:
-                with open(cache_file) as fh:
-                    payload = json.load(fh)
-                age = int((time.time() - os.path.getmtime(cache_file)) / 60)
-                return payload, Provenance('booking_rapidapi', SourceStatus.CACHED, url=url,
-                                           attribution=ATTRIBUTION,
-                                           detail=f'cached {age} min ago (free tier is metered)')
-            except (json.JSONDecodeError, OSError):
-                pass  # Corrupt cache entry — fall through and refetch.
+        cached, age_s = self._read_cache(cache_file)
+        ttl = self._ttl_for(path)
+
+        if cached is not None and age_s < ttl:
+            return cached, Provenance(
+                'booking_rapidapi', SourceStatus.CACHED, url=url,
+                attribution=ATTRIBUTION,
+                detail=f'cached {self._age_label(age_s)} ago; not re-fetched for {ttl // 3600}h')
+
+        # Past the daily ceiling, stale data beats spending a quota the
+        # traveller cannot see — as long as we say it is stale.
+        if self.budget_left() <= 0:
+            if cached is not None:
+                return cached, Provenance(
+                    'booking_rapidapi', SourceStatus.CACHED, url=url,
+                    attribution=ATTRIBUTION,
+                    detail=(f'STALE: cached {self._age_label(age_s)} ago. The daily '
+                            f'limit of {DAILY_LIMIT} live lookups is used up, so this '
+                            f'was not refreshed. Reset it in settings to fetch again.'))
+            return None, Provenance(
+                'booking_rapidapi', SourceStatus.UNAVAILABLE, url=url,
+                detail=(f'The daily limit of {DAILY_LIMIT} live hotel lookups is used '
+                        f'up and nothing matching is cached. Raise or reset it in '
+                        f'settings, or try again tomorrow.'))
 
         try:
             with self._lock:
@@ -165,14 +270,16 @@ class HotelRatesTool(ToolBase):
             return None, Provenance('booking_rapidapi', SourceStatus.FAILED, url=url,
                                     detail='provider returned non-JSON')
 
+        self._record_call()
         try:
             with open(cache_file, 'w') as fh:
                 json.dump(payload, fh)
         except OSError as exc:
             logger.warning('Could not write rate cache: %s', exc)
 
-        return payload, Provenance('booking_rapidapi', SourceStatus.LIVE, url=url,
-                                   attribution=ATTRIBUTION)
+        return payload, Provenance(
+            'booking_rapidapi', SourceStatus.LIVE, url=url, attribution=ATTRIBUTION,
+            detail=f'{self.budget_left()} of {DAILY_LIMIT} live lookups left today')
 
     # ── destination resolution ───────────────────────────────────
 
@@ -360,6 +467,23 @@ class HotelRatesTool(ToolBase):
                           data={'hotel_id': hotel_id, 'photos': urls[:20],
                                 'count': len(urls), 'provenance': prov.to_dict()},
                           message=f'{len(urls)} real photographs')
+
+    @staticmethod
+    def _read_cache(path: str):
+        """Return (payload, age_seconds), or (None, inf) when unusable."""
+        try:
+            with open(path) as fh:
+                return json.load(fh), time.time() - os.path.getmtime(path)
+        except (OSError, json.JSONDecodeError):
+            return None, float('inf')
+
+    @staticmethod
+    def _age_label(seconds: float) -> str:
+        if seconds < 3600:
+            return f'{int(seconds / 60)} min'
+        if seconds < 86400:
+            return f'{seconds / 3600:.1f} h'
+        return f'{seconds / 86400:.1f} days'
 
     @staticmethod
     def _nights(check_in: str, check_out: str) -> int:

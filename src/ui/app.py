@@ -752,6 +752,27 @@ def session_preferences(session_id):
     return jsonify({'success': True, 'preferences': session.preferences})
 
 
+@app.route('/api/settings/cache', methods=['GET', 'DELETE'])
+def cache_settings():
+    """Hotel-rate cache: what is held, what today has cost, and a reset.
+
+    The provider's free tier is metered, so this is shown rather than hidden:
+    a traveller can see how many live lookups remain and clear the cache
+    deliberately when they want fresh prices.
+    """
+    from src.tools import tool_registry
+    rates = tool_registry.get('hotel_rates')
+    if rates is None or not hasattr(rates, 'cache_stats'):
+        return jsonify({'success': False, 'error': 'no rate provider'}), 404
+
+    if request.method == 'DELETE':
+        return jsonify({'success': True, **rates.clear_cache(),
+                        'note': 'Cleared. The next search fetches fresh prices '
+                                'and spends from today\'s allowance.'})
+
+    return jsonify({'success': True, **rates.cache_stats()})
+
+
 @app.route('/api/sources', methods=['GET'])
 def list_sources():
     """Which data providers are configured, so the UI can be honest up front."""

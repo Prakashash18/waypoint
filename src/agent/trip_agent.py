@@ -210,6 +210,23 @@ class TripAgent:
         # Carry forward what the last run found, so a follow-up can talk about
         # those hotels without re-fetching them.
         prior = dict(session.artifacts) if session else {}
+
+        # Sessions live in memory, so a restart or a sleeping instance loses
+        # them while the traveller is still looking at the results. The client
+        # sends back what is on their screen; trust it to re-seed rather than
+        # answering a follow-up as though nothing had ever been found.
+        if not prior.get('hotels') and not prior.get('flights'):
+            seen = (context or {}).get('seen') or {}
+            if seen.get('hotels') or seen.get('flight'):
+                prior = {
+                    'hotels': seen.get('hotels') or [],
+                    'flights': [seen['flight']] if seen.get('flight') else [],
+                    'windows': seen.get('windows') or [],
+                    'locale': seen.get('locale'),
+                    'images': [], 'areas': [], 'airports': [],
+                }
+                logger.info('Re-seeded %d hotels from what the client had on screen',
+                            len(prior['hotels']))
         artifacts: Dict[str, Any] = {
             'hotels': list(prior.get('hotels') or []),
             'flights': list(prior.get('flights') or []),
