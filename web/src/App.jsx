@@ -304,6 +304,10 @@ export default function App() {
             )}
 
             <ChatThread messages={messages} busy={busy} onAsk={ask}
+                        onBookFlight={(card) => {
+                          const full = trip?.flight
+                          if (full) setBooking(full)
+                        }}
                         onOpenStay={(card) => {
                           const full = (result.artifacts?.hotels || [])
                             .find((h) => h.hotel_id === card.hotel_id)
@@ -430,7 +434,8 @@ function spokenSummary(result) {
                                   : ', though it has no reviews yet'}.`)
   }
   if (trip.flight?.flight_code) {
-    parts.push(`Flying ${trip.flight.flight_code} from ${trip.flight.origin}.`)
+    parts.push(`Flying ${trip.flight.airline_name || trip.flight.flight_code}`
+      + ` from ${trip.flight.origin}.`)
   }
   const cheapest = (trip.windows || []).reduce(
     (best, w) => (!best || w.price_total < best.price_total ? w : best), null)

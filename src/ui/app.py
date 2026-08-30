@@ -1041,8 +1041,9 @@ def _cards_from(result: dict, before: dict) -> list:
             'from': round(was, 2), 'to': round(now, 2),
             'delta': round(now - was, 2),
             'currency': (now_flight or {}).get('currency', 'USD'),
-            'detail': (f"{now_flight.get('flight_code')} "
-                       f"{now_flight.get('origin')}→{now_flight.get('destination')}"
+            'detail': (f"{now_flight.get('airline_name') or ''} "
+                       f"{now_flight.get('flight_code')} "
+                       f"{now_flight.get('origin')}→{now_flight.get('destination')}".strip()
                        if now_flight else ''),
         })
 
@@ -1058,6 +1059,32 @@ def _cards_from(result: dict, before: dict) -> list:
                 'delta': round(price - prev, 2),
                 'currency': hotel.get('currency', 'USD'),
                 'detail': f"{hotel.get('nights')} nights" if hotel.get('nights') else '',
+            })
+
+    # The flight itself, when the reply is about flying rather than staying.
+    if now_flight:
+        code = (now_flight.get('flight_code') or '').lower()
+        airline = (now_flight.get('airline_name') or '').lower()
+        mentions_flight = (
+            (code and code in answer) or (airline and airline in answer)
+            or any(word in answer for word in ('flight', 'fly', 'flying', 'departs', 'airline'))
+        )
+        already_priced = any(c['kind'] == 'price_change' and c['title'] == 'Flights'
+                             for c in cards)
+        if mentions_flight and not already_priced:
+            cards.append({
+                'kind': 'flight',
+                'airline_name': now_flight.get('airline_name'),
+                'flight_code': now_flight.get('flight_code'),
+                'origin': now_flight.get('origin'),
+                'destination': now_flight.get('destination'),
+                'outbound': now_flight.get('outbound'),
+                'return_leg': now_flight.get('return_leg'),
+                'price_total': now_flight.get('price_total'),
+                'price_per_passenger': now_flight.get('price_per_passenger'),
+                'passengers': now_flight.get('passengers'),
+                'currency': now_flight.get('currency'),
+                'offer_id': now_flight.get('offer_id'),
             })
 
     # Whichever stays the reply is actually about, so the answer has a face.

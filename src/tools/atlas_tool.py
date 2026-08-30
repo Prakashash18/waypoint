@@ -364,6 +364,8 @@ class AtlasTool(ToolBase):
         if not segments:
             return {}
         first, last = segments[0], segments[-1]
+        from .airlines import name_for
+
         carrier = first.get('carrier', '')
         number = first.get('flight_number', '')
         # Atlas already prefixes the carrier onto the flight number, so joining
@@ -371,6 +373,9 @@ class AtlasTool(ToolBase):
         code = number if number.upper().startswith(carrier.upper()) and carrier else f'{carrier}{number}'
         return {
             'flight_code': code,
+            'airline': carrier,
+            'airline_name': name_for(carrier),
+            'operating_carrier': name_for(first.get('operating_carrier')) or None,
             'origin': first.get('departure_airport', ''),
             'destination': last.get('arrival_airport', ''),
             'depart': AtlasTool._fmt_time(first.get('departure_time', '')),
@@ -437,6 +442,7 @@ class AtlasTool(ToolBase):
         return {
             'offer_id': raw.get('offer_id', raw.get('id', '')),
             'airline': outbound.get('airline', ''),
+            'airline_name': outbound.get('airline_name', ''),
             'flight_number': outbound.get('flight_number', ''),
             'flight_code': outbound.get('flight_code', ''),
             'origin': outbound.get('origin', ''),

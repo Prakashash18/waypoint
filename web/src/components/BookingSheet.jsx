@@ -11,7 +11,8 @@ export default function BookingSheet({ flight, onClose, voice }) {
   const [spoken, setSpoken] = useState(false)
 
   const priceLine = flight && (
-    `${money(flight.price_total, flight.currency)} for ` +
+    `${money(flight.price_total, flight.currency)} with ` +
+    `${flight.airline_name || 'the airline'} for ` +
     `${flight.passengers > 1 ? `${flight.passengers} passengers` : 'one passenger'}. Shall I book it?`
   )
 
@@ -41,7 +42,9 @@ export default function BookingSheet({ flight, onClose, voice }) {
         </button>
 
         <div className="sheet-body">
-          <p className="mono eyebrow">Booking the flight</p>
+          <p className="mono eyebrow">
+            Booking with {flight.airline_name || flight.airline || 'the airline'}
+          </p>
 
           <div className="booking-legs">
             {legs.map((leg, i) => (

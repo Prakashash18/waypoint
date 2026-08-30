@@ -39,7 +39,8 @@ export default function ComboCard({ combo, onOpen, onAsk }) {
         <p className="combo-flight">
           <Plane size={14} />
           <span>
-            {flight.flight_code} · {flight.origin}→{flight.destination}
+            <strong>{flight.airline_name || flight.flight_code}</strong>
+            {' · '}{flight.origin}→{flight.destination}
             {' '}{clockTime(flight.outbound?.depart)}
             {flight.return_leg ? ' · return' : ''}
             {flight.outbound?.duration_minutes ? ` · ${duration(flight.outbound.duration_minutes)}` : ''}

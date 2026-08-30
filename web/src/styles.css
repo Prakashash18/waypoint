@@ -744,3 +744,28 @@ img { max-width: 100%; }
   font-size: 12.5px; font-weight: 600; }
 .quota-bar span.is-out { background: var(--bad); }
 .warn-line { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--warn); }
+
+/* ── flight card inside a reply ──────────────────────────────── */
+
+.rcard.is-flight { flex: 1 1 100%; }
+.rcard.is-flight .rcard-title { display: flex; align-items: center; gap: 7px; }
+.rcard.is-flight .rcard-title svg { color: var(--faint); }
+
+.rcard-legs { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; }
+.rcard-leg {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 0; font-size: 13px;
+}
+.rcard-leg .mono { font-size: 11.5px; color: var(--faint); min-width: 52px; }
+.rcard-leg strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.rcard-leg .port { font-size: 12px; color: var(--dim); }
+.rcard-leg .dash { color: var(--faint); }
+.rcard-leg .when { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+
+.rcard-book {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  margin-top: 10px; width: 100%; min-height: 38px;
+  background: var(--accent); color: var(--accent-ink); border: 0;
+  border-radius: 9px; font: 600 13.5px/1 var(--sans); cursor: pointer;
+}
+.rcard-book:hover { filter: brightness(1.06); }

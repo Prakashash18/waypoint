@@ -76,7 +76,10 @@ export default function TripDetail({ combo, onClose, onAsk, onBookFlight }) {
 
           {flight ? (
             <div className="detail-block">
-              <p className="mono eyebrow"><Plane size={13} /> Flights</p>
+              <p className="mono eyebrow">
+                <Plane size={13} /> {flight.airline_name || 'Flights'}
+                {flight.return_leg ? ' · return' : ' · one way'}
+              </p>
               <Leg leg={flight.outbound} label="outbound" />
               {flight.return_leg && <Leg leg={flight.return_leg} label="return" />}
               <p className="fine">Times are local to each airport, as airlines publish them.</p>

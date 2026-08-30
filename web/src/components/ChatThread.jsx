@@ -8,7 +8,7 @@ import ReplyCards from './ReplyCards'
  *  Replies used to land inside a collapsed disclosure, so asking a follow-up
  *  looked like nothing happened. Every exchange now stays on the page.
  */
-export default function ChatThread({ messages, busy, onAsk, onOpenStay, suggestions = [] }) {
+export default function ChatThread({ messages, busy, onAsk, onOpenStay, onBookFlight, suggestions = [] }) {
   const endRef = useRef(null)
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function ChatThread({ messages, busy, onAsk, onOpenStay, suggesti
           ) : (
             <div className="turn-reply">
               <Answer text={m.text} busy={false} />
-              <ReplyCards cards={m.cards} onOpen={onOpenStay} />
+              <ReplyCards cards={m.cards} onOpen={onOpenStay} onBookFlight={onBookFlight} />
               {m.lookups > 0 && (
                 <p className="turn-meta">{m.lookups} lookup{m.lookups > 1 ? 's' : ''}</p>
               )}
