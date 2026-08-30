@@ -26,6 +26,13 @@
 }
 
 * { box-sizing: border-box; }
+
+/* A <button> does not inherit colour: browsers paint its text with their own
+   `buttontext`, which is black no matter the theme. Every button we style as
+   plain content — a hotel row, a date window, a thumbnail — was therefore
+   rendering black on a dark background and disappearing. Buttons that set
+   their own colour still win; this only supplies the one that was missing. */
+button { color: inherit; }
 html, body, #root { height: 100%; }
 
 body {
